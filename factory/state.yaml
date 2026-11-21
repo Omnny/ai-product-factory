@@ -1,0 +1,69 @@
+# Owned by the Orchestrator. Single source of truth for factory progress.
+# The eight V-model stages. Status: not_started | in_progress | in_review | baselined | invalidated
+# Pairs: requirements <-> acceptance, architecture <-> system_testing,
+#        design <-> integration_testing, implementation <-> unit_testing
+product: "<product name>"
+increment: 1
+
+input:
+  concept:
+    ready: false              # concept filled in and goals numbered CON-###
+
+stages:
+  # ---- left side: building (top-down)
+  requirements:
+    status: not_started
+    baseline: null            # git commit hash
+    rework_cycles: 0
+    human_approval: null      # H1: { decision: approved|changes|rejected, date: ..., ref: Q-### }
+  architecture:
+    status: not_started
+    baseline: null
+    rework_cycles: 0
+  design:
+    status: not_started       # aggregate of components
+    components: {}            # ARCH-001: { status: ..., baseline: ..., rework_cycles: 0 }
+  implementation:
+    status: not_started
+    components: {}            # ARCH-001: { status: ..., gate: pass|fail|null }
+
+  # ---- right side: verifying (specified early, executed bottom-up)
+  unit_testing:               # verifies implementation
+    spec: not_started
+    exec: not_started
+    coverage: { line: null, branch: null }
+    components: {}            # ARCH-001: { spec: ..., exec: ... }
+  integration_testing:        # verifies design
+    spec: not_started
+    exec: not_started
+  system_testing:             # verifies architecture
+    spec: not_started
+    exec: not_started
+  acceptance:                 # verifies requirements
+    spec: not_started
+    exec: not_started
+    recommendation: null
+    human_signoff: null       # H2: { decision: accepted|rejected, date: ..., notes: ... }
+
+budgets:
+  fix_iterations_per_defect: 3
+  rework_cycles_per_gate: 3
+  stall_limit: 5
+
+counters:                     # last issued number per record type
+  WO: 0
+  Q: 0
+  DEF: 0
+  CR: 0
+
+progress:
+  work_orders_since_gate_progress: 0
+
+open:
+  questions: []               # Q-###
+  defects: []                 # DEF-###
+  changes: []                 # CR-###
+
+invalidated: []               # IDs awaiting rework due to a CR or defect
+
+active_work_orders: []        # { id: WO-#, agent: ..., scope: [...], started: ... }

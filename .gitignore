@@ -1,0 +1,23 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# Node
+node_modules/
+coverage/
+dist/
+
+# Build outputs
+build/
+target/

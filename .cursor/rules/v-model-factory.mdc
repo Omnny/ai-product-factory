@@ -1,0 +1,22 @@
+---
+description: Core V-model AI Product Factory rules (ownership, traceability, independent verification)
+alwaysApply: true
+---
+
+# V-Model Factory — always-on rules
+
+This repo is an AI Product Factory. Read `AGENTS.md` before acting.
+
+V-model pairs (eight stages, no others): Requirements ↔ Acceptance, Architecture ↔ System Testing, Design ↔ Integration Testing, Implementation ↔ Unit Testing. The concept is the factory's input, not a stage.
+
+- Only edit paths your role owns (see the ownership map in `AGENTS.md`). Report upstream problems; don't fix them in place.
+- Every item you create gets an ID and an upstream link (`docs/traceability.md`):
+  - Markdown items: a heading `### <ID>: <title>`, then link fields such as `- **Satisfies:** REQ-001, REQ-002`.
+  - Code: `@implements DES-###` in a comment next to the code it implements.
+  - Tests: `@test UT-###|IT-###|ST-###|AT-###` in a comment on each automated test.
+- Requirement statements use EARS syntax (`docs/ears.md`): `[Where …,] [While …,] [When …, | If …, then] the <system> shall <response>`, exactly one "shall", with the pattern declared in the `EARS` field.
+- Never invent scope. Untraceable behavior is a defect.
+- Expected results in tests come from the paired left-side specification, never from the current code's output.
+- Implementation never edits tests; test agents never edit `src/`.
+- Before claiming done, run `python3 scripts/trace_check.py --gate <your stage>` and the relevant commands in `factory/architecture/toolchain.md`.
+- Ambiguity that affects behavior users can observe: add a `Q-###` entry to your report and stop work on that item.
