@@ -2,16 +2,16 @@
 
 ## The idea: an AI Product Factory
 
-AI agents can now generate entire applications in minutes. The hard part is no longer *writing* code. It is making sure the result actually works, is complete, and doesn't break as it grows. Ask a single agent to build a product and, as the project grows, it forgets earlier decisions, misses requirements, and breaks things that used to work.
+AI agents can now generate entire applications in minutes. The hard part is no longer *writing* code. It is making sure the result actually works, is complete, and doesn't break as it grows. If you ask a single agent to build a product, it forgets earlier decisions, misses requirements, and breaks things that used to work as the project grows.
 
-The **AI Product Factory** answers this with a methodology proven over decades in automotive, aerospace, and medical devices: the **V-model**. Every stage of the V gets its own specialized AI agent:
+The **AI Product Factory** addresses this with the **V-model**, an engineering methodology proven over decades in automotive, aerospace, and medical devices. Every stage of the V has its own specialized AI agent:
 
 - On the **left side**, agents build the product top-down: Requirements → Architecture → Design → Implementation.
 - On the **right side**, agents verify it bottom-up: Unit Testing → Integration Testing → System Testing → Acceptance.
 - Each verification stage checks the development stage **on the same level of the V**.
 - A global **orchestrator** coordinates the agents, routes every problem to the agent responsible for it, involves humans in the decisions that matter, and keeps **traceability** valid at all times. Every requirement can be followed to the architecture, design, code, and tests that realize and verify it, and back again.
 
-Because AI makes tests cheap to write and run, the factory doesn't compromise on testing: 100% unit coverage including branches, integration testing of every interface, end-to-end testing of every scenario including failure and edge cases, and acceptance of every requirement against its criteria. It loops until everything passes. Ideas go in; high-quality, correctly working products come out, backed by evidence.
+Because AI makes tests cheap to write and run, the factory doesn't compromise on testing. It requires 100% unit coverage including branches, integration testing of every interface, end-to-end testing of every scenario including failure and edge cases, and acceptance of every requirement against its criteria. The factory repeats the cycle until everything passes. Ideas go in, and high-quality, correctly working products come out, backed by evidence.
 
 📖 **Read the full concept:** [AI Product Factory: The Case for the V-Model](docs/ai-product-factory.md)
 
@@ -28,7 +28,7 @@ There are eight stage agents, one per V-model stage, coordinated by the orchestr
 | 3 | **Design**: units, behavior, collaborations, interface realization | [`design-agent.md`](.cursor/agents/design-agent.md) | ↔ | **Integration Testing**: units and components working together as designed | [`integration-test-agent.md`](.cursor/agents/integration-test-agent.md) |
 | 4 | **Implementation**: code exactly as designed | [`implementation-agent.md`](.cursor/agents/implementation-agent.md) | ↔ | **Unit Testing**: every code unit against its specification, with 100% line and branch coverage | [`unit-test-agent.md`](.cursor/agents/unit-test-agent.md) |
 
-**Orchestrator** ([`orchestrator.md`](.cursor/agents/orchestrator.md)): runs as the top-level chat session. It schedules work (in parallel where possible), validates every agent's report against evidence, enforces the eight quality gates, routes defects, analyzes change impact, and asks you for the decisions only a human can make.
+The **Orchestrator** ([`orchestrator.md`](.cursor/agents/orchestrator.md)) runs as the top-level chat session. It schedules work, in parallel where possible, validates every agent's report against evidence, enforces the eight quality gates, routes defects, analyzes change impact, and asks you for the decisions only a human can make.
 
 Each agent owns specific files and **never edits another agent's files**. Each verifying agent takes its expected results from the specification on its own level of the V, never from the code. The implementation agent can't touch tests, and test agents can't touch code. That separation of duties is what turns "the AI says it works" into evidence.
 
@@ -104,7 +104,7 @@ scripts/           trace_check.py (traceability checker) and its tests
 
 ## Specification, component, and baseline checks
 
-The native Cursor commands, agents, and rules remain the entry points. Early test case authoring uses specification checks; individual components can advance through intermediate checks without claiming a global gate passed:
+You start the factory through the native Cursor commands, agents, and rules. When agents write test cases early, specification checks verify their work. Individual components can also move forward through intermediate checks, but passing one of these checks does not mean the global gate has passed:
 
 ```bash
 python3 scripts/trace_check.py --gate unit --phase specify --scope ARCH-001
@@ -113,4 +113,4 @@ python3 scripts/trace_check.py --baseline <commit> --paths factory/design/ARCH-0
 python3 scripts/trace_check.py --impact DES-001 --json
 ```
 
-Global gates use the original unscoped execute checks. G4 runs existing unit automation as Implementation regression; initial test automation and strict coverage follow after G4, with pending verification recorded explicitly. Aggregate G5 still requires 100% line and branch coverage over all source files. Change impact distinguishes artifacts to revise from regression candidates. Resume checks compare baseline content with Git, independently of trace links. Before parallel work, the orchestrator reserves exact files and ID ranges and saves starting snapshots; unexpected changes are preserved for reconciliation.
+Global gates use the original execute checks without a scope restriction. At G4, Implementation regression runs the existing automated unit tests. The initial test automation and strict coverage checks follow after G4, and verification that is still pending is recorded explicitly. Aggregate G5 still requires 100% line and branch coverage over all source files. Change impact separates artifacts that may need revision from tests that may need to run again. When a run resumes, the factory compares baseline content with Git separately from checking trace links. Before work starts in parallel, the orchestrator reserves the exact files and ID ranges and saves snapshots of their starting state. Unexpected changes are preserved until they can be reconciled.

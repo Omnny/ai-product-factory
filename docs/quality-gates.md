@@ -1,6 +1,6 @@
 # Quality Gates
 
-There is one gate per V-model stage (G1–G8). Each gate is a checklist the owning agent self-checks and the orchestrator re-verifies. **Mechanical** items are checked by running a command. **Review** items are checked by the consumer review: the next agent down the left side, plus the paired verifying agent on the right side.
+Each V-model stage has one gate (G1–G8). The agent responsible for the stage checks its work against the gate's checklist, and the orchestrator verifies it again. **Mechanical** items are checked by running a command. **Review** items are checked in a consumer review by the next agent down the left side and the paired verifying agent on the right side.
 
 ## G1 — Requirements (human approval H1 required)
 - [ ] Mechanical: `trace_check --gate requirements` passes
@@ -32,15 +32,15 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 ## G3 — Design
 - [ ] Mechanical: `trace_check --gate design` passes
 - [ ] Every `DES` specifies: responsibility, public signatures, inputs and outputs with types and ranges, pre- and postconditions, error handling, state and side effects, and dependencies
-- [ ] Algorithms and business rules are explicit enough to derive unit test oracles (boundary values listed)
-- [ ] Collaborations are explicit: which units call which, in which order, with which data and error propagation, and how each interface is realized. These are the integration test oracles
+- [ ] Algorithms and business rules are explicit enough to determine the expected results for unit tests, with boundary values listed
+- [ ] Collaborations explicitly describe which units call which, in which order, what data they pass, how errors propagate, and how each interface is realized. These descriptions define the expected results for integration tests
 - [ ] Design conforms to the interfaces in the architecture (no undeclared cross-component calls)
 - [ ] Consumer review: Implementation Agent (implementability), Integration Test Agent (testability of collaborations), and Unit Test Agent (testability of units) report no blocking findings
 
 ## G4 — Implementation
 - [ ] Mechanical: `trace_check --gate implementation` passes
 - [ ] Mechanical: the build succeeds. Lint and type checks are clean (toolchain commands)
-- [ ] Mechanical: build, lint/type checks, and Implementation regression passed. Initial empty automation is explicitly deferred, never reported green. Required strict fast/slow checks are recorded as pending until test agents execute; G4 does not require tests that can only be created after G4. Existing automated test failures block readiness
+- [ ] Mechanical: build, lint and type checks, and Implementation regression passed. If the first automated tests have not been written yet, that work is explicitly deferred and never reported as passed. Required strict fast and slow checks are recorded as pending until the test agents execute them. G4 does not require tests that can only be created after G4. Failures in existing automated tests block readiness
 - [ ] No code without an `@implements` tag (or a reviewed `@trace-exempt`)
 - [ ] No TODOs, stubs, or placeholder behavior in delivered code
 - [ ] No secrets or credentials in source
@@ -55,14 +55,14 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 ## G6 — Integration Testing (verifies Design)
 - [ ] Mechanical: `trace_check --gate integration` passes
 - [ ] All IT pass. Every internal interface and every multi-unit component is tested for collaboration as designed: contract conformance, data flow, error propagation, and dependency failure (timeout, unavailable, malformed response)
-- [ ] The slow suite passed on the same build for all levels automated so far (including unit regression and every IT). Not-yet-automated higher levels are explicitly deferred. Integration test report written
+- [ ] The slow suite passed on the same build for all levels automated so far, including unit regression and every IT. Higher levels whose tests have not yet been automated are explicitly deferred. The integration test report is written
 
 ## G7 — System Testing (verifies Architecture)
 - [ ] Mechanical: `trace_check --gate system` passes
 - [ ] All ST pass on the complete system, built and started from a clean state as `toolchain.md` documents
 - [ ] Every component is exercised, every external interface is verified (including failure of external systems), and every scenario runs end to end, including failure, unusual, and edge cases
 - [ ] The architecture's non-functional mechanisms are verified at system level (performance under load, security controls, recovery)
-- [ ] The slow suite passed on the same build through system testing, including every ST. Not-yet-automated acceptance is explicitly deferred. System test report written
+- [ ] The slow suite passed on the same build through system testing, including every ST. If acceptance tests have not yet been automated, acceptance is explicitly deferred. The system test report is written
 
 ## G8 — Acceptance (verifies Requirements; human sign-off H2 required)
 - [ ] Mechanical: `trace_check --gate acceptance` passes; `factory/trace/matrix.md` regenerated
@@ -76,8 +76,8 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 
 ## Component and specification checkpoints
 
-`trace_check --gate <unit|integration|system|acceptance> --phase specify` validates early cases against their paired left-side inputs, without requiring implementation, automation, coverage, or acceptance verdicts. Specify completion records `spec` readiness and never closes G5–G8.
+`trace_check --gate <unit|integration|system|acceptance> --phase specify` checks early test cases against the inputs from their paired left-side stage. Implementation, automation, coverage, and acceptance verdicts are not required at this point. Completing specify work records that `spec` is ready. It never closes G5–G8.
 
-`--scope ARCH-###` is available for intermediate design, implementation, and unit checks. Other components' missing coverage obligations become warnings. Upstream errors, duplicate IDs, invalid tags, and orphan source still block. Component coverage includes every source file attributed to that component; the toolchain must list exact selectors. Aggregate G3–G5 require unscoped execute checks, and aggregate G5 requires 100% line and branch coverage over all `src/` before G6 starts.
+Use `--scope ARCH-###` for intermediate checks of a component's design, implementation, and unit tests. Missing coverage for other components is reported as a warning. Upstream errors, duplicate IDs, invalid tags, and source files without traceability still block the check. Component coverage includes every source file attributed to that component, and the toolchain must list the exact selectors. Aggregate G3–G5 require execute checks without a scope restriction. Before G6 starts, aggregate G5 requires 100% line and branch coverage over all `src/`.
 
-Baseline integrity is an additional, read-only check: `trace_check --baseline <commit> --paths <recorded owned paths> --json`. It compares content against Git, independently of trace validity. Pending required verification blocks CR closure and H2.
+Baseline integrity has its own read-only check: `trace_check --baseline <commit> --paths <recorded owned paths> --json`. It compares content against Git separately from checking whether trace links are valid. A CR cannot close and H2 cannot pass while required verification is still pending.

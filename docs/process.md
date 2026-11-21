@@ -1,6 +1,6 @@
 # Factory Process
 
-This document describes how the factory runs end to end. Agent-specific logic lives in `.cursor/agents/`. Message formats are in [`protocols.md`](protocols.md), exit criteria in [`quality-gates.md`](quality-gates.md), and ID and link rules in [`traceability.md`](traceability.md).
+This document describes how the factory runs end to end. The instructions for each agent are in `.cursor/agents/`. Message formats are in [`protocols.md`](protocols.md), exit criteria in [`quality-gates.md`](quality-gates.md), and the rules for IDs and links in [`traceability.md`](traceability.md).
 
 ![The V-model](images/v-model.png)
 
@@ -17,7 +17,7 @@ The factory has exactly the eight V-model stages: four on the left side (buildin
 
 The **concept** (`factory/concept/concept.md`) is not a stage. It is the factory's *input*: the human's refined product idea, whose goals are numbered `CON-###` so that requirements and the final acceptance verdicts can be traced back to it.
 
-Each pair is a **contract**. A right-side agent writes its test specification from its left-side counterpart **as soon as that counterpart is baselined**, before any code exists. This is the horizontal link of the V-model, and it keeps the tests independent of the code. (Unit tests verify implemented units, but their expected results come from the unit specifications in the design, so they too can be written as soon as the design is baselined.)
+Each pair is a **contract**. A right-side agent writes its test specification from its left-side counterpart **as soon as that counterpart is baselined**, before any code exists. This is the horizontal link of the V-model, and it keeps the tests independent of the code. Unit tests verify implemented units, but their expected results come from the unit specifications in the design, so they too can be written as soon as the design is baselined.
 
 ## 2. Stage lifecycle
 
@@ -56,19 +56,19 @@ Right side, bottom-up execution once code exists:
 
 Rules for running work in parallel:
 
-1. Author/execute work starts once its required inputs are baselined. Consumer review reads the candidate in_review artifact. Early specify work requires its paired left-side baseline, not implementation or execution baselines.
+1. Work in author or execute mode starts once its required inputs are baselined. In a consumer review, the agent reads the candidate artifact while it is in_review. Early work in specify mode requires the baseline of its paired left-side stage. It does not need implementation or execution baselines.
 2. Work orders that write to **different owned paths** may run at the same time, for example Design for `ARCH-001` and Design for `ARCH-002`, or Implementation and the unit test specification for the same component.
-3. Reserve exact disjoint files and ID ranges before dispatch. The ownership map alone does not prevent same-role conflicts: serialize shared build config, DEC files, and aggregate reports. Save starting hashes/index/untracked state and preserve unexpected edits; never automatically revert the shared diff.
-4. Execution order on the right side is bottom-up: there is no point running system tests on a build with failing unit tests. The *specifications* for all four levels are written early and in parallel. When a higher level runs, the levels below it run with it. During day-to-day edits the fast suite carries that check; the slow suite carries it when the change is large or small changes have accumulated (`AGENTS.md`).
+3. Before assigning work, reserve the exact files and ID ranges so that they do not overlap. The ownership map alone cannot prevent conflicts between agents in the same role. Work on shared build configuration, DEC files, and aggregate reports must happen one order at a time. Save the starting file hashes, index state, and untracked-file state. Preserve unexpected edits, and never automatically revert the shared diff.
+4. Tests on the right side run bottom-up: there is no point running system tests on a build with failing unit tests. The *specifications* for all four levels are written early and in parallel. When a higher level runs, the levels below it run with it. During day-to-day edits, the fast suite provides that check. The slow suite provides it when the change is large or small changes have accumulated (`AGENTS.md`).
 
 ### Fast and slow test suites
 
-Product tests run as two suites, so small edits stay quick and wide risk is still checked.
+Product tests run as two suites. This keeps small edits quick while still checking for problems that may affect more of the product.
 
 - **Fast** — unit tests, plus any in-process integration test the toolchain lists. Run it after every small change.
-- **Slow** — the fast suite, then integration, system, and acceptance, in that order. Run it when the change can break more than the units just edited (another component, an interface, a scenario, or a requirement), and when fast-only changes have piled up to `budgets.small_changes_before_slow_suite` (default 5). A passing slow run resets the count.
+- **Slow** — the fast suite, then integration, system, and acceptance, in that order. Run it when a change can break more than the units just edited: another component, an interface, a scenario, or a requirement. Also run it when the number of changes checked only with the fast suite reaches `budgets.small_changes_before_slow_suite` (default 5). A passing slow run resets the count.
 
-G4 runs Implementation regression against existing unit automation without the new-unit coverage threshold; initial missing automation is recorded as deferred. Strict fast/slow checks execute after G4 when test agents create automation, with pending obligations recorded in state. G5 requires the fast suite at 100% line and branch coverage: component commands cover their complete source sets; aggregate G5 covers all `src/`. Gates G6–G8 require a passing slow suite through the current automated level; G8 permits no deferred level. The commands live in `factory/architecture/toolchain.md`. A component/specification checkpoint is not a global gate pass.
+At G4, Implementation regression runs the existing automated unit tests without applying the coverage threshold to new units. If the first automated tests have not been written yet, that work is recorded as deferred. The test agents create the automation after G4, then run the strict fast and slow checks. Checks that are still required are recorded as pending in state. G5 requires the fast suite to pass with 100% line and branch coverage. Each component command covers all of that component's source files, while aggregate G5 covers all `src/`. Gates G6–G8 require the slow suite to pass through the current automated level. G8 permits no deferred level. The commands are recorded in `factory/architecture/toolchain.md`. Passing a component or specification checkpoint does not mean the global gate has passed.
 
 ### Incremental delivery
 
@@ -89,7 +89,7 @@ One gate per stage:
 | G7 | System Testing | Orchestrator | All ST pass, lower levels green, `--gate system` |
 | G8 | Acceptance | Acceptance Agent, then **human (H2)** | All AT pass, every `CON` and `REQ` accepted with evidence, `--gate acceptance` |
 
-A gate never passes on an agent's word alone. The orchestrator re-runs the mechanical checks itself.
+A gate never passes just because an agent says it does. The orchestrator runs the mechanical checks again itself.
 
 ## 5. Verification loops and defect routing
 
@@ -116,10 +116,10 @@ The loop for each defect is: route it, fix it, re-run the failing test, then re-
 Changes come from a human (`/factory-change`), from a defect classified as `requirement`, `architecture`, or `design`, or from a finding during review.
 
 1. The orchestrator writes `factory/changes/CR-###.md` (`templates/change-request.md`).
-2. **Impact analysis.** It identifies the directly changed IDs, then runs `python3 scripts/trace_check.py --impact REQ-004 --json`. Record revision candidates (`impact`) separately from conservative verification candidates (`regression`). Dependency edges include callers; verification propagation includes affected component system tests and related acceptance tests without forcing upstream specification rework. Honor `minimum_suite` plus the behavioral and accumulation rules.
+2. **Impact analysis.** The orchestrator identifies the directly changed IDs, then runs `python3 scripts/trace_check.py --impact REQ-004 --json`. It records artifacts that may need revision (`impact`) separately from the conservative set of tests that may need to run again (`regression`). Dependency links include callers. The verification set includes system tests for affected components and related acceptance tests, without automatically requiring changes to upstream specifications. Follow `minimum_suite` as well as the rules for changes in behavior and accumulated changes.
 3. It marks the affected stages `invalidated` in `state.yaml` and lists the affected IDs.
 4. It issues work orders **top-down**, limited to the affected IDs: Requirements, then Architecture, then Design, then Implementation. The paired test specifications are updated in parallel as each counterpart is re-baselined.
-5. It re-runs the fast suite when the impact stays inside the edited units, and the slow suite when the impact reaches another component, an interface, a scenario, or a requirement. The slow suite runs bottom-up, so the levels below regress as part of it.
+5. It re-runs the fast suite when the impact stays inside the edited units, and the slow suite when the impact reaches another component, an interface, a scenario, or a requirement. The slow suite runs bottom-up, so it also checks the lower levels for regressions.
 6. Acceptance re-evaluates the affected `CON` and `REQ` verdicts from the slow run when acceptance tests are in the impact set. A human signs off again if H1 or H2 is affected.
 7. The CR is closed with links to the new baselines.
 
@@ -140,4 +140,4 @@ Escalations are written to `factory/questions.md` and shown to the human togethe
 
 ## Resume and baseline integrity
 
-Store commit and literal owned paths with each aggregate, component, and specification checkpoint. At startup compare each record with `trace_check --baseline <commit> --paths <paths> --json`, then run the highest closed global trace gate if one exists. Trace validity cannot detect behavior changes that retain their tags. Reconcile drift with approved CRs and active work-order starting snapshots; preserve unexplained changes for review. Retain ID reservations and pending verification across interruption. An unknown ref or missing path record blocks dependent work until reconciled.
+For each aggregate, component, and specification checkpoint, store the commit and the literal paths it owns. At startup, compare each record with `trace_check --baseline <commit> --paths <paths> --json`, then run the highest closed global trace gate if one exists. Valid trace links cannot reveal a change in behavior if the tags stay the same. Compare differences with approved CRs and the starting snapshots of active work orders. Preserve unexplained changes for review. Keep ID reservations and pending verification when a run is interrupted. An unknown Git reference or a missing path record blocks dependent work until it has been reconciled.

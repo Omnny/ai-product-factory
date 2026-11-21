@@ -1,6 +1,6 @@
 # EARS — Easy Approach to Requirements Syntax
 
-Every `REQ` **Statement** in this factory is written in EARS. EARS limits each requirement to a small set of sentence templates. This removes most ambiguity, makes triggers and preconditions explicit, and gives each requirement a ready-made test structure. `scripts/trace_check.py --gate requirements` enforces the grammar.
+Every `REQ` **Statement** in this factory is written in EARS. EARS limits each requirement to a small set of sentence templates. This removes most ambiguity, makes triggers and preconditions explicit, and gives each requirement a structure that can be used directly in a test. `scripts/trace_check.py --gate requirements` enforces the grammar.
 
 ## The patterns
 
@@ -27,7 +27,7 @@ Grammar (case-insensitive keywords, optional trailing period):
 4. **Make the response observable and measurable.** Use concrete values and units ("within 2 s", "error code AUTH_EXPIRED"), and no vague words (fast, easy, appropriate, user-friendly, robust, etc., and/or).
 5. **Use `unwanted` for every failure behavior.** Each use case extension that handles an error becomes an `If …, then …` requirement. Don't hide error handling inside an event-driven statement.
 6. **Describe states, not timing, in `While` clauses.** "While the device is offline", not "While loading takes long".
-7. **Acceptance criteria stay in Given/When/Then.** EARS defines the *requirement*. The acceptance criteria give concrete examples of it, with values and boundaries.
+7. **Acceptance criteria stay in Given/When/Then.** EARS defines the *requirement*. The acceptance criteria show what it means through concrete examples, including values and boundaries.
 8. Declare the pattern in the `EARS` field. The checker verifies that it matches the statement.
 
 ## From use cases to EARS
@@ -57,7 +57,7 @@ Grammar (case-insensitive keywords, optional trailing period):
 
 ## How EARS maps to tests
 
-Requirements are verified by **acceptance tests** (the Acceptance stage is paired with Requirements in the V). Each clause becomes a part of the acceptance test:
+Requirements are verified by **acceptance tests**. The Acceptance stage is paired with Requirements on the V, and each clause becomes part of the acceptance test:
 
 | Clause | Test part |
 |---|---|

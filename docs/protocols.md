@@ -1,10 +1,10 @@
 # Protocols
 
-Agents only communicate through the orchestrator, using two message types: the **Work Order** (orchestrator to agent) and the **Agent Report** (agent to orchestrator). Persistent records (defects, questions, change requests, decisions) are files created from the templates in `templates/`.
+Agents communicate only through the orchestrator. They use two message types: the **Work Order**, sent from the orchestrator to an agent, and the **Agent Report**, sent back from the agent to the orchestrator. Defects, questions, change requests, and decisions are kept as persistent records in files created from the templates in `templates/`.
 
 ## Work Order (orchestrator → agent)
 
-The orchestrator sends this as the full prompt when it launches a stage subagent. A subagent starts with **no memory** of the conversation, so the work order must be self-contained.
+The orchestrator sends the work order as the full prompt when it launches a stage subagent. A subagent starts with **no memory** of the conversation. The work order must therefore contain all the context it needs.
 
 ```markdown
 # Work Order WO-<n>: <short title>
@@ -78,7 +78,7 @@ Every agent ends its turn with exactly this structure, as its final message:
 - <what the orchestrator should schedule next>
 ```
 
-The orchestrator assigns real numbers to `Q-draft` and `DEF-draft` entries when it records them, so agents never compete for the next ID.
+When the orchestrator records `Q-draft` and `DEF-draft` entries, it assigns their actual numbers. This keeps agents from competing for the next ID.
 
 ## Modes
 
@@ -115,15 +115,15 @@ The orchestrator appends one line per event to `factory/log.md`:
 
 | Work-order mode | Completion evidence |
 |---|---|
-| `review` | Read-only findings against the reviewed inputs; no execution gate required |
-| `specify` | Case completeness, exact oracle sources, and `trace_check --gate <test-level> --phase specify`; no code, automation, coverage, or verdict required |
-| `author` / `revise` / `fix` | Relevant left-side checklist, using component scope where applicable; G4 uses Implementation regression before unit automation is complete |
-| `execute` | Automated cases, observed results, reports, coverage where applicable, and the execute check (default phase) |
+| `review` | Findings from a read-only review of the inputs. No execution gate is required |
+| `specify` | Complete cases, exact sources for expected results, and a passing `trace_check --gate <test-level> --phase specify` check. Code, automation, coverage, and verdicts are not required |
+| `author` / `revise` / `fix` | The relevant left-side checklist, limited to the component where applicable. G4 uses Implementation regression before unit automation is complete |
+| `execute` | Automated cases, observed results, reports, coverage where applicable, and a passing check in the default execute phase |
 
-For component design, implementation, and unit orders append `--scope ARCH-###`. This is intermediate readiness only. Aggregate gates always use unscoped execute checks. Specify checks validate the paired left-side artifacts plus the requested test specification; they do not require other verification levels or generate the acceptance matrix.
+For work orders covering a component's design, implementation, or unit tests, append `--scope ARCH-###`. This only establishes that the component is ready to move forward. Aggregate gates always use execute checks without a scope restriction. Specify checks validate the paired left-side artifacts and the requested test specification. They do not require the other verification levels or generate the acceptance matrix.
 
-Before dispatch, the orchestrator persists an active-work-order record with exact write files (not just a parent directory), starting hashes and index/untracked state, ID ranges, and the chosen commands/coverage source paths. Record missing files explicitly. Existing human changes remain protected. Parallel orders need disjoint files; serialize shared configuration and aggregate reports. Unexpected changes are preserved and reconciled, never automatically reverted.
+Before assigning work, the orchestrator saves an active-work-order record. It lists the exact files the agent may write, rather than just their parent directory, along with the starting file hashes, index state, untracked-file state, ID ranges, chosen commands, and source paths for coverage. Record missing files explicitly, and protect existing human changes. Parallel orders must use files that do not overlap. Work on shared configuration and aggregate reports happens one order at a time. Preserve unexpected changes until they can be reconciled; never automatically revert them.
 
-The orchestrator allocates IDs, advances high-water counters, and persists ranges before dispatch. Agents never allocate from a shared "next available" number. They return partial if a range is exhausted. Keep unused numbers reserved across interruptions and cancellations.
+The orchestrator allocates IDs, updates the counters that record the highest reserved numbers, and saves the ranges before assigning work. Agents never choose IDs from a shared "next available" number. If an agent uses up its range, it returns partial. Unused numbers stay reserved even when work is interrupted or cancelled.
 
-A specification or component report cannot claim an aggregate gate pass. Deferred initial automation is recorded as pending verification. A stage closes only when its own automated cases run; acceptance and CR closure permit no pending required checks. Evidence records the tested build/revision, commands, collected counts, coverage source set, and results; a comment tag establishes traceability only.
+A specification or component report cannot claim that an aggregate gate has passed. If the first test automation is deferred, record it as pending verification. A stage closes only when its own automated cases run. Acceptance and CR closure allow no required checks to remain pending. Evidence records the tested build/revision, commands, collected counts, source files included in coverage, and results. A comment tag establishes traceability only.
