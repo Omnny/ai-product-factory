@@ -9,6 +9,8 @@ Usage:
                                            stages: requirements architecture design implementation
                                                    unit integration system acceptance
   trace_check.py --impact ID [ID ...]      list everything downstream of the given IDs
+  trace_check.py --gate unit --phase specify --scope ARCH-001
+  trace_check.py --baseline REF --paths src factory/design --json
   trace_check.py --gate acceptance --matrix factory/trace/matrix.md
 """
 
@@ -17,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -37,7 +40,7 @@ TYPES: dict[str, tuple[str, str, dict[str, set[str]]]] = {
     "EXT": ("architecture", "architecture", {}),
     "ARCH": ("architecture", "architecture", {"Satisfies": {"REQ"}}),
     "IF": ("architecture", "architecture", {"Between": {"ARCH", "EXT"}, "Satisfies": {"REQ"}}),
-    "DES": ("design", "design", {"Refines": {"ARCH", "IF"}}),
+    "DES": ("design", "design", {"Refines": {"ARCH", "IF"}, "Dependencies": {"DES", "IF"}}),
     "UT": ("unit", "verification/unit", {"Verifies": {"DES"}}),
     "IT": ("integration", "verification/integration", {"Verifies": {"DES", "IF"}}),
     "ST": ("system", "verification/system", {"Verifies": {"ARCH", "IF", "SCN"}}),
@@ -47,7 +50,9 @@ LINK_FIELDS = {f for _, _, links in TYPES.values() for f in links}
 TEST_DIRS = {"UT": "unit", "IT": "integration", "ST": "system", "AT": "acceptance"}
 ACCEPTING_VERDICTS = {"accepted", "waived"}
 VERDICTS = ACCEPTING_VERDICTS | {"rejected"}
-VERDICT_ROW_RE = re.compile(r"^\|\s*\**((?:CON|REQ)-\d{3,})\**\s*\|\s*\**\s*([A-Za-z]+)[^|]*\|(.*)$")
+VERDICT_ROW_RE = re.compile(
+    r"^\|\s*\**((?:CON|REQ)-\d{3,})\**\s*\|\s*\**\s*([A-Za-z]+)\s*\**\s*\|([^|]*)\|(.*)$"
+)
 
 CODE_EXTS = {
     ".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".go", ".rs", ".java", ".kt", ".kts",
@@ -117,6 +122,7 @@ class Issue:
     stage: str
     message: str
     where: str = ""
+    subject: str = ""  # Coverage obligation; used to scope intermediate component checks.
 
     def render(self) -> str:
         return f"[{self.stage}] {self.message}" + (f"  ({self.where})" if self.where else "")
@@ -134,11 +140,13 @@ class Model:
     # CON/REQ id -> [(verdict, evidence ids, location)] from verdict tables in factory/acceptance/
     verdicts: dict[str, list[tuple[str, list[str], str]]] = field(default_factory=lambda: defaultdict(list))
 
-    def children(self) -> dict[str, list[tuple[str, str]]]:
+    def children(self, include_dependencies: bool = False) -> dict[str, list[tuple[str, str]]]:
         """Reverse edges: upstream id -> [(downstream id, field)]."""
         rev: dict[str, list[tuple[str, str]]] = defaultdict(list)
         for item in self.items.values():
             for fld, targets in item.links.items():
+                if fld == "Dependencies" and not include_dependencies:
+                    continue
                 for t in targets:
                     rev[t].append((item.id, fld))
         return rev
@@ -174,7 +182,7 @@ def parse_markdown(model: Model, path: Path, collect_verdicts: bool = False) -> 
         if collect_verdicts:
             row = VERDICT_ROW_RE.match(stripped)
             if row:
-                evidence = [i for i in ID_RE.findall(row.group(3)) if i.split("-")[0] in TYPES]
+                evidence = ID_RE.findall(row.group(3))
                 model.verdicts[row.group(1)].append(
                     (row.group(2).lower(), evidence, f"{rel(model.root, path)}:{lineno}")
                 )
@@ -207,7 +215,7 @@ def parse_markdown(model: Model, path: Path, collect_verdicts: bool = False) -> 
         name, value = fld.group(1), fld.group(2)
         if name in LINK_FIELDS:
             for target in ID_RE.findall(value):
-                if target.split("-")[0] in TYPES and target not in current.links[name]:
+                if target not in current.links[name]:
                     current.links[name].append(target)
         else:
             current.fields.setdefault(name, value.strip())
@@ -264,7 +272,7 @@ def where(item: Item) -> str:
     return f"{item.path}:{item.line}"
 
 
-def check(model: Model) -> list[Issue]:
+def check(model: Model, gate: str = "acceptance", phase: str = "execute") -> list[Issue]:
     issues: list[Issue] = []
     add = issues.append
     items = model.items
@@ -294,6 +302,8 @@ def check(model: Model) -> list[Issue]:
                     add(Issue(stage, f"{item.id} {fld} {t}, which is not defined", where(item)))
                 elif t.split("-")[0] not in allowed[fld]:
                     add(Issue(stage, f"{item.id} {fld} {t}: {fld} may only target {sorted(allowed[fld])}", where(item)))
+                elif fld == "Dependencies" and (t == item.id or items[t].retired):
+                    add(Issue(stage, f"{item.id} Dependencies {t}: dependency must be live and not itself", where(item)))
         linked = [t for ts in item.links.values() for t in ts if t in items]
         if not item.retired and linked and all(items[t].retired for t in linked):
             add(Issue(stage, f"{item.id} traces only to retired items {linked}", where(item)))
@@ -305,12 +315,12 @@ def check(model: Model) -> list[Issue]:
                 targets = [t for t in targets if t.split("-")[0] in need]
             if not targets:
                 extra = f" (at least one {sorted(need)})" if need else ""
-                add(Issue(stage, f"{item.id} has no '{fld}' link{extra}", where(item)))
+                add(Issue(stage, f"{item.id} has no '{fld}' link{extra}", where(item), item.id))
 
     def require_downstream(prefix: str, child_prefixes: set[str], stage: str, label: str) -> None:
         for item in model.live(prefix):
             if not live_children(item.id, child_prefixes):
-                add(Issue(stage, f"{item.id} is not {label}", where(item)))
+                add(Issue(stage, f"{item.id} is not {label}", where(item), item.id))
 
     def reaches_req(item_id: str) -> bool:
         """True if a live REQ derives from item_id, directly or through use cases / user stories."""
@@ -366,7 +376,7 @@ def check(model: Model) -> list[Issue]:
     # --- implementation
     for item in model.live("DES"):
         if not model.implements.get(item.id):
-            add(Issue("implementation", f"{item.id} has no implementing code (@implements {item.id})", where(item)))
+                add(Issue("implementation", f"{item.id} has no implementing code (@implements {item.id})", where(item), item.id))
     for tag_id, files in sorted(model.implements.items()):
         if tag_id not in items:
             add(Issue("implementation", f"@implements {tag_id} references an undefined item", ", ".join(files)))
@@ -382,8 +392,8 @@ def check(model: Model) -> list[Issue]:
         stage = TYPES[prefix][0]
         require_upstream(prefix, "Verifies", stage)
         for item in model.live(prefix):
-            if not model.tests.get(item.id):
-                add(Issue(stage, f"{item.id} has no automated test (@test {item.id})", where(item)))
+            if phase == "execute" and not model.tests.get(item.id):
+                add(Issue(stage, f"{item.id} has no automated test (@test {item.id})", where(item), item.id))
     for tag_id, files in sorted(model.tests.items()):
         prefix = tag_id.split("-")[0]
         if prefix not in TEST_DIRS:
@@ -392,6 +402,8 @@ def check(model: Model) -> list[Issue]:
         stage = TYPES[prefix][0]
         if tag_id not in items:
             add(Issue(stage, f"@test {tag_id} references an undefined test case", ", ".join(files)))
+        elif items[tag_id].retired:
+            add(Issue(stage, f"@test {tag_id} references a retired test case", ", ".join(files)))
         for f in files:
             if not f.startswith(f"tests/{TEST_DIRS[prefix]}/"):
                 add(Issue(stage, f"@test {tag_id} must live under tests/{TEST_DIRS[prefix]}/", f))
@@ -408,7 +420,7 @@ def check(model: Model) -> list[Issue]:
     # --- integration testing <-> design: units and components work together as designed
     for interface in internal_ifs:
         if not live_children(interface.id, {"IT"}):
-            add(Issue("integration", f"{interface.id} (internal interface) is not verified by any IT", where(interface)))
+            add(Issue("integration", f"{interface.id} (internal interface) is not verified by any IT", where(interface), interface.id))
     for comp in model.live("ARCH"):
         units = live_children(comp.id, {"DES"})
         if len(units) < 2:
@@ -416,18 +428,25 @@ def check(model: Model) -> list[Issue]:
         comp_ifs = [i.id for i in internal_ifs if comp.id in between(i)]
         if not any(live_children(x, {"IT"}) for x in units + comp_ifs):
             add(Issue("integration", f"{comp.id} has {len(units)} design units but no IT verifies their "
-                                     f"collaboration (Verifies one of its DES or interfaces)", where(comp)))
+                                     f"collaboration (Verifies one of its DES or interfaces)", where(comp), comp.id))
 
     # --- system testing <-> architecture: the complete system, as architected, end to end
     require_downstream("ARCH", {"ST"}, "system", "exercised by any ST")
     for interface in external_ifs:
         if not live_children(interface.id, {"ST"}):
-            add(Issue("system", f"{interface.id} (external interface) is not verified by any ST", where(interface)))
+            add(Issue("system", f"{interface.id} (external interface) is not verified by any ST", where(interface), interface.id))
     require_downstream("SCN", {"ST"}, "system", "verified end to end by any ST")
 
     # --- acceptance <-> requirements: every requirement accepted, with evidence
     require_downstream("REQ", {"AT"}, "acceptance", "verified by any AT")
+    if phase == "specify":
+        paired = {"unit": "design", "integration": "design", "system": "architecture", "acceptance": "requirements"}[gate]
+        # Specifications need paired left-side inputs, not code, automation,
+        # execution of other test levels, or acceptance verdicts.
+        return [i for i in issues if GATES.index(i.stage) <= GATES.index(paired) or i.stage == gate]
     for item_id, rows in sorted(model.verdicts.items()):
+        if len(rows) > 1:
+            add(Issue("acceptance", f"Duplicate verdict for {item_id}", rows[1][2]))
         for verdict, evidence, loc in rows:
             if item_id not in items:
                 add(Issue("acceptance", f"Verdict for {item_id}, which is not defined", loc))
@@ -436,6 +455,10 @@ def check(model: Model) -> list[Issue]:
             for e in evidence:
                 if e not in items:
                     add(Issue("acceptance", f"Verdict for {item_id} cites {e}, which is not defined", loc))
+                elif items[e].prefix not in TEST_DIRS or items[e].retired:
+                    add(Issue("acceptance", f"Verdict for {item_id} evidence {e} must be a live UT/IT/ST/AT case", loc))
+                elif item_id in items and not evidence_relevant(model, item_id, e):
+                    add(Issue("acceptance", f"Verdict for {item_id} cites unrelated evidence {e}", loc))
     for prefix in ("CON", "REQ"):
         for item in model.live(prefix):
             rows = model.verdicts.get(item.id, [])
@@ -443,16 +466,65 @@ def check(model: Model) -> list[Issue]:
                 add(Issue("acceptance", f"{item.id} has no verdict in the acceptance report", where(item)))
             elif any(v not in ACCEPTING_VERDICTS for v, _, _ in rows):
                 add(Issue("acceptance", f"{item.id} is not accepted ({rows[0][2]})", where(item)))
-            elif prefix == "REQ" and any(v == "accepted" and not e for v, e, _ in rows):
+            elif any(v == "accepted" and not e for v, e, _ in rows):
                 add(Issue("acceptance", f"{item.id} verdict cites no evidence (AT/ST/IT/UT IDs)", rows[0][2]))
+            if prefix == "REQ":
+                for verdict, evidence, loc in rows:
+                    if verdict == "accepted" and not any(
+                        e in items and items[e].prefix == "AT" and not items[e].retired
+                        and item.id in items[e].links.get("Verifies", []) for e in evidence
+                    ):
+                        add(Issue("acceptance", f"{item.id} accepted verdict must cite an AT verifying this requirement", loc))
     return issues
 
 
 # --------------------------------------------------------------------------- impact & matrix
 
 
-def impact(model: Model, ids: list[str]) -> dict[str, list[str]]:
+def evidence_relevant(model: Model, item_id: str, test_id: str) -> bool:
+    """Evidence must verify a derivation of the goal/requirement, not just exist."""
     rev = model.children()
+    seen, queue = {item_id}, [item_id]
+    while queue:
+        for child, _ in rev.get(queue.pop(), []):
+            if child not in seen and not model.items[child].retired:
+                seen.add(child)
+                queue.append(child)
+    return test_id in seen
+
+
+def component_scope(model: Model, components: list[str]) -> set[str]:
+    """Only refinement establishes ownership; dependencies do not expand scope."""
+    selected = set(components)
+    for unit in model.live("DES"):
+        if selected.intersection(unit.links.get("Refines", [])):
+            selected.add(unit.id)
+    for case in model.items.values():
+        if case.prefix == "UT" and selected.intersection(case.links.get("Verifies", [])):
+            selected.add(case.id)
+    return selected
+
+
+def partition_issues(issues: list[Issue], gate: str, scope: set[str] | None = None) -> tuple[list[Issue], list[Issue]]:
+    errors, warnings = [], []
+    for issue in issues:
+        outside_scope = (scope is not None and GATES.index(issue.stage) >= GATES.index("design")
+                         and issue.subject and issue.subject not in scope)
+        target = warnings if GATES.index(issue.stage) > GATES.index(gate) or outside_scope else errors
+        target.append(issue)
+    return errors, warnings
+
+
+def impact(model: Model, ids: list[str]) -> dict[str, list[str]]:
+    rev = model.children(include_dependencies=True)
+    # A changed provider unit can affect callers that depend on its realized
+    # interface. Propagate to those callers without marking the interface
+    # specification itself as changed merely because implementation changed.
+    for unit in model.live("DES"):
+        for interface in unit.links.get("Refines", []):
+            if interface.startswith("IF-"):
+                rev[unit.id].extend((caller, "Dependencies") for caller, fld in rev.get(interface, [])
+                                    if fld == "Dependencies")
     seen: set[str] = set()
     queue = list(ids)
     while queue:
@@ -469,6 +541,48 @@ def impact(model: Model, ids: list[str]) -> dict[str, list[str]]:
     result["code"] = sorted({f for i in affected for f in model.implements.get(i, [])})
     result["tests"] = sorted({f for i in affected for f in model.tests.get(i, [])})
     return {k: v for k, v in result.items() if v}
+
+
+def regression_impact(model: Model, ids: list[str]) -> tuple[dict[str, list[str]], str]:
+    """Conservative verification candidates, separate from artifacts to revise."""
+    rework = impact(model, ids)
+    affected = set(ids) | {i for key, values in rework.items() if key in TYPES for i in values}
+    owners = {t for i in affected if i in model.items and model.items[i].prefix == "DES"
+              for t in model.items[i].links.get("Refines", []) if t.startswith("ARCH-") and t in model.items}
+    owners.update(i for i in affected if i.startswith("ARCH-") and i in model.items)
+    interfaces = {i.id for i in model.live("IF") if owners.intersection(i.links.get("Between", []))}
+    requirements = {t for i in owners | interfaces for t in model.items[i].links.get("Satisfies", [])}
+    candidates = impact(model, sorted(affected | owners | interfaces | requirements))
+    tests = {i for values in candidates.values() for i in values if i in model.items
+             and model.items[i].prefix in TEST_DIRS and not model.items[i].retired}
+    tests.update(i for i in affected if i in model.items and model.items[i].prefix in TEST_DIRS)
+    result = {p: sorted(i for i in tests if i.startswith(p + "-")) for p in TEST_DIRS}
+    result["tests"] = sorted({f for i in tests for f in model.tests.get(i, [])})
+    # A single-component private change may use the fast suite between global
+    # gates. Higher-level evidence remains pending until a slow run on that build.
+    broad = len(owners) > 1 or any(i.split("-")[0] in {"CON", "UC", "US", "REQ", "SCN", "ARCH", "IF", "EXT"}
+                                   for i in ids)
+    return {k: v for k, v in result.items() if v}, "slow" if broad else "fast"
+
+
+def baseline_changes(root: Path, ref: str, paths: list[str]) -> dict:
+    """Read-only comparison against a committed baseline, including new files."""
+    if not paths or any(Path(p).is_absolute() or ".." in Path(p).parts or p.startswith(":") for p in paths):
+        raise ValueError("--paths requires repository-relative literal paths without '..' or Git pathspec magic")
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "--literal-pathspecs", "-C", str(root), *args], check=True,
+                              capture_output=True, text=True).stdout
+
+    commit = git("rev-parse", "--verify", "--end-of-options", ref + "^{commit}").strip()
+    for path in paths:
+        if not (root / path).exists() and not git("ls-tree", "-r", "--name-only", commit, "--", path).strip():
+            raise ValueError(f"Baseline path does not exist in the baseline or workspace: {path}")
+    changed = set(filter(None, git("diff", "--no-renames", "--name-only", "-z", commit, "--", *paths).split("\0")))
+    changed.update(filter(None, git("diff", "--cached", "--no-renames", "--name-only", "-z",
+                                   commit, "--", *paths).split("\0")))
+    changed.update(filter(None, git("ls-files", "--others", "--exclude-standard", "-z", "--", *paths).split("\0")))
+    return {"mode": "baseline", "baseline": commit, "paths": paths, "changed": sorted(changed), "pass": not changed}
 
 
 def matrix(model: Model, issues: list[Issue], gate: str) -> str:
@@ -530,6 +644,14 @@ def matrix(model: Model, issues: list[Issue], gate: str) -> str:
         out.append("")
 
     tests = sorted((i for i in items.values() if i.prefix in TEST_DIRS), key=lambda i: i.id)
+    dependencies = [i for i in items.values() if i.prefix == "DES" and i.links.get("Dependencies")]
+    if dependencies:
+        dependency_rev = model.children(include_dependencies=True)
+        out += ["## Design dependencies", "", "| Unit | Dependencies | Used by |", "|---|---|---|"]
+        for unit in sorted((i for i in items.values() if i.prefix == "DES"), key=lambda i: i.id):
+            callers = sorted({c for c, fld in dependency_rev.get(unit.id, []) if fld == "Dependencies"})
+            out.append(f"| {name(unit)} | {ups(unit, 'Dependencies')} | {', '.join(callers) or '—'} |")
+        out.append("")
     if tests:
         out += ["## Test cases", "", "| Test case | Verifies | Automated in |", "|---|---|---|"]
         out += [f"| {name(t)} | {ups(t, 'Verifies')} | {', '.join(model.tests.get(t.id, [])) or '—'} |" for t in tests]
@@ -546,20 +668,52 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="V-model traceability checker")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--gate", choices=GATES, default="acceptance")
+    parser.add_argument("--phase", choices=["specify", "execute"], default="execute")
+    parser.add_argument("--scope", nargs="+", metavar="ARCH-ID",
+                        help="intermediate component check at design, implementation, or unit; never closes a global gate")
     parser.add_argument("--impact", nargs="+", metavar="ID")
+    parser.add_argument("--baseline", metavar="REF", help="compare owned paths against a Git baseline (read-only)")
+    parser.add_argument("--paths", nargs="+", metavar="PATH", help="literal repository-relative paths for --baseline")
     parser.add_argument("--matrix", nargs="?", const="factory/trace/matrix.md", metavar="PATH",
                         help="write the matrix (default path factory/trace/matrix.md; implied by --gate acceptance)")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 
     root = args.root.resolve()
+    if args.baseline:
+        if args.impact or args.scope or args.matrix or args.phase != "execute":
+            parser.error("--baseline cannot be combined with impact, scope, matrix, or specify mode")
+        try:
+            result = baseline_changes(root, args.baseline, args.paths or [])
+        except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+            detail = exc.stderr.strip() if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+            result = {"mode": "baseline", "pass": False, "error": detail}
+        print(json.dumps(result, indent=2) if args.json else
+              f"Baseline: {'PASS' if result['pass'] else 'FAIL'}\n" +
+              (result.get("error") or "\n".join(result["changed"])))
+        return 0 if result["pass"] else 1
+    if args.paths:
+        parser.error("--paths requires --baseline")
+    if args.phase == "specify" and args.gate not in TEST_DIRS.values():
+        parser.error("--phase specify requires a unit, integration, system, or acceptance gate")
+    if args.scope and args.gate not in {"design", "implementation", "unit"}:
+        parser.error("--scope is supported only at design, implementation, and unit")
+    if args.matrix and (args.scope or args.phase != "execute"):
+        parser.error("matrix generation requires a global execute check")
+    if args.impact and (args.scope or args.phase != "execute" or args.matrix):
+        parser.error("--impact cannot be combined with scope, specify, or matrix")
     model = load(root)
+    if args.scope and any(i not in model.items or model.items[i].prefix != "ARCH" or model.items[i].retired
+                          for i in args.scope):
+        parser.error("--scope must name existing live ARCH components")
 
     if args.impact:
         unknown = [i for i in args.impact if i not in model.items]
         result = impact(model, args.impact)
+        regression, suite = regression_impact(model, args.impact)
         if args.json:
-            print(json.dumps({"ids": args.impact, "unknown": unknown, "impact": result}, indent=2))
+            print(json.dumps({"ids": args.impact, "unknown": unknown, "impact": result,
+                              "regression": regression, "minimum_suite": suite}, indent=2))
         else:
             if unknown:
                 print(f"Unknown IDs: {', '.join(unknown)}")
@@ -568,14 +722,17 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {key}: {', '.join(values)}")
             if not result:
                 print("  (nothing downstream)")
+            print("Regression candidates (verification only; not automatic specification rework):")
+            for key, values in regression.items():
+                print(f"  {key}: {', '.join(values)}")
+            print(f"Minimum suite from graph: {suite} (public/shared behavior or the accumulation budget may require slow)")
         return 1 if unknown else 0
 
-    issues = check(model)
-    gate_idx = GATES.index(args.gate)
-    errors = [i for i in issues if GATES.index(i.stage) <= gate_idx]
-    warnings = [i for i in issues if GATES.index(i.stage) > gate_idx]
+    issues = check(model, args.gate, args.phase)
+    scope = component_scope(model, args.scope) if args.scope else None
+    errors, warnings = partition_issues(issues, args.gate, scope)
 
-    matrix_path = args.matrix or ("factory/trace/matrix.md" if args.gate == "acceptance" else None)
+    matrix_path = args.matrix or ("factory/trace/matrix.md" if args.gate == "acceptance" and args.phase == "execute" else None)
     if matrix_path:
         target = (root / matrix_path) if not Path(matrix_path).is_absolute() else Path(matrix_path)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -584,7 +741,8 @@ def main(argv: list[str] | None = None) -> int:
     counts = {p: len(model.live(p)) for p in TYPES}
     if args.json:
         print(json.dumps({
-            "gate": args.gate, "pass": not errors, "counts": counts,
+            "gate": args.gate, "phase": args.phase, "scope": args.scope,
+            "check": "component" if args.scope else args.phase, "pass": not errors, "counts": counts,
             "errors": [i.__dict__ for i in errors], "warnings": [i.__dict__ for i in warnings],
         }, indent=2))
     else:
@@ -593,8 +751,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR   {i.render()}")
         for i in warnings:
             print(f"warning {i.render()}")
-        print(f"Gate '{args.gate}': {'PASS' if not errors else 'FAIL'} "
-              f"({len(errors)} errors, {len(warnings)} warnings beyond this gate)")
+        label = "Component check" if args.scope else ("Specification check" if args.phase == "specify" else "Gate")
+        print(f"{label} '{args.gate}': {'PASS' if not errors else 'FAIL'} "
+              f"({len(errors)} errors, {len(warnings)} warnings beyond this gate or scope)")
         if matrix_path:
             print(f"Matrix written to {matrix_path}")
     return 1 if errors else 0

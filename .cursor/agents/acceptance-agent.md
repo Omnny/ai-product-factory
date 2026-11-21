@@ -40,11 +40,13 @@ Each case lists `Verifies: REQ-###`, preconditions, steps through public entry p
 
 ## Execute mode (after the system level is green, G7)
 
-1. **Run from a clean state.** Following `toolchain.md`, build and start the product from a clean checkout, then run the **slow suite** (fast suite, then integration, system, and acceptance). Record the commands and results. Stale reports are not evidence.
+1. **Prepare a clean run.** Following `toolchain.md`, build and start the product from a clean checkout. Preserve ongoing workspace changes; never clean/reset the shared workspace to obtain it.
 2. **Automate and run the acceptance tests** in `tests/acceptance/`, tagged `@test AT-###`, through public entry points only. Triage failures:
    - The product doesn't meet a requirement → `code` defect (state the REQ, the criterion, the steps, and the actual and expected results).
    - The requirement is ambiguous or conflicts with another → `requirement` defect (may need the human).
    - The test is wrong → fix your own test (cite the criterion).
+
+   Then run the **complete slow suite**, including the newly automated AT, bottom-up on that same build. No level may be deferred. Record revision, commands, counts, and results; stale reports and trace tags are not passing evidence.
 3. **Verdict per requirement.** Fill the verdict table in the acceptance report with one row per REQ: `| REQ-### | accepted / rejected / waived | evidence IDs | criteria check |`.
    - `accepted`: every acceptance criterion is covered by a passing AT. Cite the AT IDs, plus ST/IT/UT IDs where they add evidence.
    - `rejected`: any criterion is missing, failing, or only partly covered.
@@ -53,7 +55,7 @@ Each case lists `Verifies: REQ-###`, preconditions, steps through public entry p
 5. **Exploratory check.** Use the product the way the concept's target user would, through its real entry points. Play each primary actor and walk their use cases, including at least one extension per use case. Note anything confusing, surprising, or inconsistent with the concept, even if no requirement covers it. Report these as findings (proposed CRs), not verdicts.
 6. **Open items.** List open defects by severity, assumptions never confirmed, coverage exclusions, waivers, and known limitations and residual risks.
 7. **Recommendation.** `accept` / `accept with conditions` / `reject`, with the reasons.
-8. Run `python3 scripts/trace_check.py --gate acceptance` (this also regenerates `factory/trace/matrix.md`).
+8. Run `python3 scripts/trace_check.py --gate acceptance` (this also regenerates `factory/trace/matrix.md`). Put live, relevant test IDs in the Evidence cell itself; Notes do not count. Each accepted REQ must cite an AT that directly verifies it. Human waivers remain explicit recorded decisions.
 
 ## Rules
 - Never read or edit `src/` or the design. Never weaken a test to pass.
@@ -61,5 +63,9 @@ Each case lists `Verifies: REQ-###`, preconditions, steps through public entry p
 - Don't fix anything in the product. Rejections and findings go to the orchestrator as defects or proposed CRs.
 - Write the report for a non-engineer: what the product does, how to run it, what was verified, and what remains.
 
-## Exit criteria
+## Execute exit criteria
 G8 Acceptance: all AT pass, every `CON` and `REQ` has a verdict with evidence, the mechanical checks pass, and the report is ready for the human sign-off (H2), which the orchestrator obtains. End with an Agent Report.
+
+## Mode-specific completion
+
+In `specify` mode, finish when the cases cover the paired requirements artifacts and `python3 scripts/trace_check.py --gate acceptance --phase specify` passes. Implementation, automated tests, execution results, and verdicts are not required yet. Record specification readiness separately; this never closes the execution gate. In `execute` mode, the execution criteria above apply. Review is read-only. Use only the work order's reserved IDs and exact files; report partial if an allocation is exhausted.

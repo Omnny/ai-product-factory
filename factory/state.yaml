@@ -14,34 +14,56 @@ stages:
   requirements:
     status: not_started
     baseline: null            # git commit hash
+    baseline_paths: []        # literal owned paths compared on resume
     rework_cycles: 0
     human_approval: null      # H1: { decision: approved|changes|rejected, date: ..., ref: Q-### }
   architecture:
     status: not_started
     baseline: null
+    baseline_paths: []
     rework_cycles: 0
   design:
-    status: not_started       # aggregate of components
-    components: {}            # ARCH-001: { status: ..., baseline: ..., rework_cycles: 0 }
+    status: not_started       # aggregate; only unscoped checks can close it
+    baseline: null
+    baseline_paths: []
+    components: {}            # ARCH-001: { status: ..., baseline: ..., baseline_paths: [...], rework_cycles: 0 }
   implementation:
     status: not_started
-    components: {}            # ARCH-001: { status: ..., gate: pass|fail|null }
+    baseline: null
+    baseline_paths: []
+    components: {}            # ARCH-001: { status: ..., baseline: ..., baseline_paths: [...], gate: pass|fail|null }
 
   # ---- right side: verifying (specified early, executed bottom-up)
   unit_testing:               # verifies implementation
     spec: not_started
+    spec_baseline: null
+    spec_baseline_paths: []
     exec: not_started
+    baseline: null
+    baseline_paths: []
     coverage: { line: null, branch: null }
-    components: {}            # ARCH-001: { spec: ..., exec: ... }
+    components: {}            # ARCH-001: { spec: ..., spec_baseline: ..., spec_baseline_paths: [...], exec: ..., baseline: ..., baseline_paths: [...], coverage: ... }
   integration_testing:        # verifies design
     spec: not_started
+    spec_baseline: null
+    spec_baseline_paths: []
     exec: not_started
+    baseline: null
+    baseline_paths: []
   system_testing:             # verifies architecture
     spec: not_started
+    spec_baseline: null
+    spec_baseline_paths: []
     exec: not_started
+    baseline: null
+    baseline_paths: []
   acceptance:                 # verifies requirements
     spec: not_started
+    spec_baseline: null
+    spec_baseline_paths: []
     exec: not_started
+    baseline: null
+    baseline_paths: []
     recommendation: null
     human_signoff: null       # H2: { decision: accepted|rejected, date: ..., notes: ... }
 
@@ -56,6 +78,21 @@ counters:                     # last issued number per record type
   Q: 0
   DEF: 0
   CR: 0
+  # Artifact high-water marks. Reserve ranges and persist before dispatch.
+  CON: 0
+  UC: 0
+  US: 0
+  REQ: 0
+  SCN: 0
+  EXT: 0
+  ARCH: 0
+  IF: 0
+  DES: 0
+  UT: 0
+  IT: 0
+  ST: 0
+  AT: 0
+  DEC: 0
 
 progress:
   work_orders_since_gate_progress: 0
@@ -68,4 +105,14 @@ open:
 
 invalidated: []               # IDs awaiting rework due to a CR or defect
 
-active_work_orders: []        # { id: WO-#, agent: ..., scope: [...], started: ... }
+pending_verification: []     # { gate: ..., scope: [...], commands: [...], source_revision: ..., reason: ... }
+
+active_work_orders: []
+# Each entry is persisted BEFORE dispatch:
+# { id: WO-#, agent: ..., mode: ..., scope: [...], write_files: [...],
+#   reserved_ids: { DES: [first, last], DEC: [first, last] },
+#   starting_files: { path: { exists: true|false, sha256: ..., index_blob: ... } },
+#   starting_untracked: [...], check_phase: specify|execute,
+#   coverage_sources: [...], commands: [...], started: ... }
+# Keep starting content/diffs recoverable and record pre-existing human edits.
+# Retain reservations across restarts; never reuse cancelled/unused IDs.

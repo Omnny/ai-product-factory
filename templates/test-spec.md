@@ -1,5 +1,7 @@
 # <Unit | Integration | System | Acceptance> Test Specification: <scope>
 
+- **Phase:** specify (case readiness only; execution/coverage/verdicts follow later)
+- **Reserved IDs / exact output files:** <from work order>
 - **Owner:** <Unit Test | Integration Test | System Test | Acceptance> Agent
 - **Verifies baseline:** <paired stage tag: implementation (oracle: design) | design | architecture | requirements>
 - **Level rules (V-model pairs):**

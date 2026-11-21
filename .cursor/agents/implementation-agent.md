@@ -24,15 +24,15 @@ You write the **production code**: exactly what the design specifies, no more an
 
 ## Procedure (author mode)
 
-1. **Scaffold** (first run only): create the project structure and configuration so that every toolchain command runs, including empty test runs at all four levels (unit, integration, system, acceptance). Report any command that can't be made to work as an `environment` defect against the toolchain.
+1. **Scaffold** (first run only): create the project structure and configuration so that every toolchain command runs, including documented deferred status before each test level's initial automation (never a claimed test pass). Report any command that can't be made to work as an `environment` defect against the toolchain.
 2. For each DES in scope:
    - Implement the signatures exactly as designed.
    - Implement every behavior step, every error condition, and every boundary exactly as specified.
    - Add the `@implements DES-###` tag in a comment directly above the implementing construct.
    - Keep pure logic separate from I/O, as the design specifies, so the code can be tested.
 3. Run build, lint, format check, and type check. Fix everything.
-4. Run the suite named in the work order. The default is the **fast suite** from `toolchain.md`. Run the **slow suite** when the work order says the change is large or that small changes have accumulated (`AGENTS.md`). Report which command ran and the pass and fail counts. You may not change tests to make them pass.
-5. Run `python3 scripts/trace_check.py --gate implementation`.
+4. Run **Implementation regression** from `toolchain.md`: existing unit automation without a coverage threshold on newly implemented units. Report initial zero automation as deferred. Run fast/slow checks required by the work order when automation is ready; otherwise record pending verification for the test agents after G4. Existing failing tests block G4. Never change tests to make them pass.
+5. Run `python3 scripts/trace_check.py --gate implementation --scope ARCH-###` for component work; omit scope for aggregate G4. Use only exact reserved files and ID ranges; shared scaffolding/config changes require an exclusive work order.
 
 ## Fix mode (routed `code` defect)
 1. Reproduce the failure with the exact test command from the defect.

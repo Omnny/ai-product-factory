@@ -2,6 +2,7 @@
 
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -435,6 +436,278 @@ class TraceCheckTest(unittest.TestCase):
         code, result = self.run_check(VALID, "--impact", "REQ-404")
         self.assertEqual(code, 1)
         self.assertEqual(result["unknown"], ["REQ-404"])
+
+    # --------------------------------------------------------- specification vs execution
+
+    def test_each_test_level_can_specify_before_code_or_automation_exists(self):
+        files = {p: v for p, v in VALID.items() if not p.startswith(("src/", "tests/"))
+                 and not p.endswith("acceptance-report.md")}
+        for gate in ("unit", "integration", "system", "acceptance"):
+            with self.subTest(gate=gate):
+                code, result = self.run_check(files, "--gate", gate, "--phase", "specify")
+                self.assertEqual(code, 0, self.messages(result))
+                self.assertEqual(result["phase"], "specify")
+        code, result = self.run_check(files, "--gate", "unit")
+        self.assertEqual(code, 1)
+        self.assertIn("no implementing code", self.messages(result))
+        self.assertIn("no automated test", self.messages(result))
+
+    def test_acceptance_spec_needs_only_requirements_and_does_not_write_matrix(self):
+        files = {p: v for p, v in VALID.items() if p.startswith(("factory/concept/", "factory/requirements/"))
+                 or p == "factory/acceptance/acceptance-tests.md"}
+        root = self.build(files)
+        with redirect_stdout(io.StringIO()):
+            code = trace_check.main(["--root", str(root), "--gate", "acceptance", "--phase", "specify"])
+        self.assertEqual(code, 0)
+        self.assertFalse((root / "factory/trace/matrix.md").exists())
+
+    def test_specification_checks_still_require_cases_and_valid_oracles(self):
+        files = self.changed("factory/verification/unit/specs.md", "- **Verifies:** DES-002", "- **Verifies:** REQ-001")
+        code, result = self.run_check(files, "--gate", "unit", "--phase", "specify")
+        self.assertEqual(code, 1)
+        self.assertIn("Verifies may only target", self.messages(result))
+        self.assertIn("DES-002 is not verified by any UT", self.messages(result))
+        files = dict(VALID)
+        files.pop("factory/verification/integration/integration-tests.md")
+        code, _ = self.run_check(files, "--gate", "integration", "--phase", "specify")
+        self.assertEqual(code, 1)
+
+    def test_component_checks_allow_pending_siblings_but_global_gate_fails(self):
+        files = {p: v for p, v in VALID.items() if p not in {
+            "factory/design/ARCH-002-calculator.md", "src/calc.py", "factory/verification/unit/specs.md"}}
+        files["factory/verification/unit/specs.md"] = "### UT-001: parser\n- **Verifies:** DES-001\n"
+        files["tests/unit/test_units.py"] = "# @test UT-001\n"
+        for gate in ("design", "implementation", "unit"):
+            with self.subTest(gate=gate):
+                code, result = self.run_check(files, "--gate", gate, "--scope", "ARCH-001")
+                self.assertEqual(code, 0, self.messages(result))
+                self.assertEqual(result["check"], "component")
+                self.assertIn("ARCH-002 is not refined", self.messages(result, "warnings"))
+                code, _ = self.run_check(files, "--gate", gate)
+                self.assertEqual(code, 1)
+
+    def test_scope_does_not_hide_selected_component_or_upstream_gaps(self):
+        files = dict(VALID)
+        files.pop("src/cli.py")
+        code, result = self.run_check(files, "--gate", "implementation", "--scope", "ARCH-001")
+        self.assertEqual(code, 1)
+        self.assertIn("DES-001 has no implementing code", self.messages(result))
+        files = dict(VALID)
+        files[REQS] += "\n### REQ-002: Store\n- **Source:** CON-001\n- **EARS:** ubiquitous\n- **Statement:** The system shall store results.\n"
+        code, result = self.run_check(files, "--gate", "design", "--scope", "ARCH-001")
+        self.assertEqual(code, 1)
+        self.assertIn("REQ-002 is not allocated", self.messages(result))
+
+    def test_scope_does_not_hide_duplicates_bad_tags_or_orphan_source(self):
+        files = dict(VALID)
+        files["factory/design/duplicate.md"] = "### DES-002: Duplicate\n- **Refines:** ARCH-002\n"
+        files["src/other.py"] = "print('untraced')\n"
+        files["tests/unit/test_units.py"] += "# @test UT-999\n"
+        code, result = self.run_check(files, "--gate", "unit", "--scope", "ARCH-001")
+        self.assertEqual(code, 1)
+        msgs = self.messages(result)
+        self.assertIn("Duplicate definition", msgs)
+        self.assertIn("Source file has no", msgs)
+        self.assertIn("undefined test case", msgs)
+
+    def test_invalid_scope_phase_and_matrix_combinations_are_rejected(self):
+        root = self.build(VALID)
+        from contextlib import redirect_stderr
+        for args in (("--gate", "design", "--phase", "specify"),
+                     ("--gate", "unit", "--scope", "ARCH-999"),
+                     ("--gate", "acceptance", "--scope", "ARCH-001"),
+                     ("--gate", "unit", "--scope", "ARCH-001", "--matrix"),
+                     ("--gate", "acceptance", "--phase", "specify", "--matrix")):
+            with self.subTest(args=args), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+                trace_check.main(["--root", str(root), *args])
+            self.assertEqual(error.exception.code, 2)
+
+    # ---------------------------------------------------------- dependencies and regression
+
+    def test_dependency_impact_reaches_callers_code_and_their_tests(self):
+        files = dict(VALID)
+        files["factory/design/ARCH-001-cli.md"] += "\n- **Dependencies:** DES-002\n"
+        files.pop("tests/unit/test_units.py")
+        files["tests/unit/test_cli.py"] = "# @test UT-001\n"
+        files["tests/unit/test_calc.py"] = "# @test UT-002\n"
+        code, result = self.run_check(files, "--impact", "DES-002")
+        self.assertEqual(code, 0)
+        self.assertEqual(result["impact"]["DES"], ["DES-001"])
+        self.assertIn("src/cli.py", result["impact"]["code"])
+        self.assertIn("tests/unit/test_cli.py", result["impact"]["tests"])
+        self.assertEqual(result["minimum_suite"], "slow")
+        self.assertIn("ST-001", result["regression"]["ST"])
+        self.assertIn("AT-001", result["regression"]["AT"])
+        self.assertNotIn("ARCH", result["impact"])
+        self.assertNotIn("AT", result["impact"])
+
+    def test_private_unit_impact_keeps_higher_verification_separate(self):
+        _, result = self.run_check(VALID, "--impact", "DES-002")
+        self.assertEqual(result["minimum_suite"], "fast")
+        self.assertNotIn("ST", result["impact"])
+        self.assertIn("tests/system/test_sys.py", result["regression"]["tests"])
+        self.assertIn("tests/acceptance/test_acc.py", result["regression"]["tests"])
+
+    def test_provider_impact_reaches_callers_via_realized_interface(self):
+        files = dict(VALID)
+        files['factory/design/ARCH-001-cli.md'] += '\n- **Dependencies:** IF-001\n'
+        code, result = self.run_check(files, '--impact', 'DES-002')
+        self.assertEqual(code, 0)
+        self.assertIn('DES-001', result['impact']['DES'])
+        self.assertIn('src/cli.py', result['impact']['code'])
+        self.assertNotIn('IF', result['impact'])
+        self.assertEqual(result['minimum_suite'], 'slow')
+
+    def test_dependencies_are_validated_without_becoming_refinement(self):
+        for target in ("DES-999", "REQ-001", "DES-002", "BOGUS-001"):
+            files = dict(VALID)
+            files["factory/design/ARCH-002-calculator.md"] += f"\n- **Dependencies:** {target}\n"
+            code, result = self.run_check(files, "--gate", "design")
+            self.assertEqual(code, 1, target)
+            self.assertIn("Dependencies", self.messages(result))
+        files = dict(VALID)
+        files["factory/design/ARCH-002-calculator.md"] += "\n- **Dependencies:** DES-001\n"
+        root = self.build(files)
+        self.assertNotIn(("DES-002", "Dependencies"), trace_check.load(root).children().get("DES-001", []))
+        code, result = self.run_check(files, "--gate", "acceptance")
+        self.assertEqual(code, 0, self.messages(result))
+
+    def test_retired_dependencies_fail_and_matrix_includes_callers(self):
+        files = dict(VALID)
+        files['factory/design/ARCH-001-cli.md'] += '\n- **Dependencies:** DES-002\n'
+        root = self.build(files)
+        model = trace_check.load(root)
+        report = trace_check.matrix(model, trace_check.check(model), 'acceptance')
+        self.assertIn('| DES-002 | — | DES-001 |', report)
+        self.assertIn('| DES-001 | DES-002 | — |', report)
+        files['factory/design/ARCH-002-calculator.md'] = files['factory/design/ARCH-002-calculator.md'].replace(
+            '### DES-002: add()', '### DES-002 (retired): add()')
+        _, result = self.run_check(files, '--gate', 'design')
+        self.assertIn('dependency must be live', self.messages(result))
+
+    def test_dependency_cycles_terminate_and_unknown_component_impact_is_reported(self):
+        files = dict(VALID)
+        files["factory/design/ARCH-001-cli.md"] += "\n- **Dependencies:** DES-002\n"
+        files["factory/design/ARCH-002-calculator.md"] += "\n- **Dependencies:** DES-001\n"
+        code, result = self.run_check(files, "--impact", "DES-002")
+        self.assertEqual(code, 0)
+        self.assertIn("DES-001", result["impact"]["DES"])
+        code, result = self.run_check(VALID, "--impact", "ARCH-999")
+        self.assertEqual(code, 1)
+        self.assertEqual(result["unknown"], ["ARCH-999"])
+
+    # ---------------------------------------------------------- acceptance evidence
+
+    def test_notes_cannot_fill_an_empty_evidence_cell(self):
+        files = self.changed("factory/acceptance/acceptance-report.md",
+                             "| REQ-001 | accepted | AT-001, ST-001 | AC1 ok |",
+                             "| REQ-001 | accepted | | REQ-001 reviewed; AT-001 mentioned |")
+        code, result = self.run_check(files)
+        self.assertEqual(code, 1)
+        self.assertIn("verdict cites no evidence", self.messages(result))
+
+    def test_evidence_must_be_live_relevant_tests_in_the_evidence_cell(self):
+        for evidence in ("REQ-001", "BOGUS-001", "ST-001"):
+            files = self.changed("factory/acceptance/acceptance-report.md",
+                                 "| REQ-001 | accepted | AT-001, ST-001 | AC1 ok |",
+                                 f"| REQ-001 | accepted | {evidence} | AT-001 in notes |")
+            code, _ = self.run_check(files)
+            self.assertEqual(code, 1, evidence)
+        files = dict(VALID)
+        files["factory/acceptance/acceptance-report.md"] += "| CON-001 | accepted | AT-001 | duplicate |\n"
+        code, result = self.run_check(files)
+        self.assertEqual(code, 1)
+        self.assertIn("Duplicate verdict", self.messages(result))
+
+    def test_unrelated_or_retired_evidence_and_retired_test_tags_fail(self):
+        files = dict(VALID)
+        files['factory/concept/concept.md'] += '\n### CON-002: Other goal\n'
+        files[REQS] += '\n### REQ-002: Other\n- **Source:** CON-002\n- **EARS:** ubiquitous\n- **Statement:** The system shall store results.\n'
+        files['factory/acceptance/acceptance-report.md'] += '| REQ-002 | accepted | AT-001 | |\n'
+        _, result = self.run_check(files)
+        self.assertIn('unrelated evidence AT-001', self.messages(result))
+        files = dict(VALID)
+        files['factory/verification/unit/specs.md'] += '\n### UT-999 (retired): Old\n- **Verifies:** DES-002\n'
+        files['tests/unit/test_units.py'] += '# @test UT-999\n'
+        files['factory/acceptance/acceptance-report.md'] = files['factory/acceptance/acceptance-report.md'].replace('AT-001, ST-001', 'AT-001, UT-999')
+        _, result = self.run_check(files)
+        self.assertIn('references a retired test case', self.messages(result))
+        self.assertIn('must be a live UT/IT/ST/AT case', self.messages(result))
+
+    # ---------------------------------------------------------- actual Git baseline integrity
+
+    def git(self, root, *args):
+        return subprocess.run(['git', '-c', 'user.name=Factory test', '-c', 'user.email=factory@example.invalid',
+                               '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null',
+                               '-C', str(root), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    def baseline_repo(self):
+        root = self.build(VALID)
+        self.git(root, 'init')
+        self.git(root, 'add', '.')
+        self.git(root, 'commit', '-m', 'chore: baseline fixture')
+        return root, self.git(root, 'rev-parse', 'HEAD')
+
+    def test_baseline_detects_untagged_behavior_change_that_trace_check_cannot(self):
+        root, ref = self.baseline_repo()
+        self.assertTrue(trace_check.baseline_changes(root, ref, ['src'])['pass'])
+        (root / 'src/calc.py').write_text('# @implements DES-002\ndef add(a, b): return a - b\n')
+        self.assertFalse(trace_check.check(trace_check.load(root)))
+        result = trace_check.baseline_changes(root, ref, ['src'])
+        self.assertFalse(result['pass'])
+        self.assertEqual(result['changed'], ['src/calc.py'])
+        self.git(root, 'add', 'src/calc.py')
+        self.git(root, 'commit', '-m', 'fix: out-of-band change')
+        self.assertEqual(trace_check.baseline_changes(root, ref, ['src'])['changed'], ['src/calc.py'])
+
+    def test_baseline_includes_staged_deleted_untracked_and_renamed_files(self):
+        root, ref = self.baseline_repo()
+        self.git(root, 'mv', 'src/calc.py', 'src/calculator with spaces.py')
+        (root / 'src/cli.py').unlink()
+        (root / 'src/new.py').write_text('# @implements DES-001\n')
+        (root / 'outside.txt').write_text('outside the owned paths')
+        before = self.git(root, 'status', '--porcelain')
+        result = trace_check.baseline_changes(root, ref, ['src'])
+        self.assertEqual(result['changed'], ['src/calc.py', 'src/calculator with spaces.py', 'src/cli.py', 'src/new.py'])
+        self.assertEqual(before, self.git(root, 'status', '--porcelain'))
+
+    def test_baseline_detects_index_change_even_when_worktree_matches_baseline(self):
+        root, ref = self.baseline_repo()
+        p = root / 'src/calc.py'
+        p.write_text('# @implements DES-002\ndef add(a, b): return a - b\n')
+        self.git(root, 'add', 'src/calc.py')
+        p.write_text(VALID['src/calc.py'])
+        before = self.git(root, 'status', '--porcelain')
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = trace_check.main(['--root', str(root), '--baseline', ref, '--paths', 'src', '--json'])
+        self.assertEqual(code, 1)
+        self.assertEqual(json.loads(buf.getvalue())['changed'], ['src/calc.py'])
+        self.assertEqual(before, self.git(root, 'status', '--porcelain'))
+
+    def test_baseline_cli_success_is_read_only_and_honors_literal_paths(self):
+        root, ref = self.baseline_repo()
+        (root / 'src/new.py').write_text('# @implements DES-001\n')
+        before = self.git(root, 'status', '--porcelain')
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = trace_check.main(['--root', str(root), '--baseline', ref, '--paths', 'src/calc.py', '--json'])
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(buf.getvalue())['pass'])
+        self.assertFalse((root / 'factory/trace/matrix.md').exists())
+        self.assertEqual(before, self.git(root, 'status', '--porcelain'))
+
+    def test_baseline_cli_fails_closed_for_bad_ref_or_paths(self):
+        root, _ = self.baseline_repo()
+        for args in (['--baseline', 'missing', '--paths', 'src'],
+                     ['--baseline', 'HEAD'], ['--baseline', 'HEAD', '--paths', '../src'],
+                     ['--baseline', 'HEAD', '--paths', 'typo-does-not-exist'],
+                     ['--baseline', 'HEAD', '--paths', ':(exclude)src']):
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = trace_check.main(['--root', str(root), '--json', *args])
+            self.assertEqual(code, 1)
+            self.assertFalse(json.loads(buf.getvalue())['pass'])
 
 
 if __name__ == "__main__":

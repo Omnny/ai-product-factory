@@ -101,3 +101,16 @@ scripts/           trace_check.py (traceability checker) and its tests
 4. **Comprehensive testing is the default.** That means 100% unit line and branch coverage, every interface integrated, every scenario run end to end, and every requirement accepted against its criteria.
 5. **Loops instead of a single pass.** The agents test, fix, and test again until the gate passes, within an iteration budget. When the budget runs out, the factory asks a human.
 6. **Humans decide what only humans can.** That includes product goals, ambiguities, trade-offs, and final acceptance.
+
+## Specification, component, and baseline checks
+
+The native Cursor commands, agents, and rules remain the entry points. Early test case authoring uses specification checks; individual components can advance through intermediate checks without claiming a global gate passed:
+
+```bash
+python3 scripts/trace_check.py --gate unit --phase specify --scope ARCH-001
+python3 scripts/trace_check.py --gate implementation --scope ARCH-001
+python3 scripts/trace_check.py --baseline <commit> --paths factory/design/ARCH-001-example.md --json
+python3 scripts/trace_check.py --impact DES-001 --json
+```
+
+Global gates use the original unscoped execute checks. G4 runs existing unit automation as Implementation regression; initial test automation and strict coverage follow after G4, with pending verification recorded explicitly. Aggregate G5 still requires 100% line and branch coverage over all source files. Change impact distinguishes artifacts to revise from regression candidates. Resume checks compare baseline content with Git, independently of trace links. Before parallel work, the orchestrator reserves exact files and ID ranges and saves starting snapshots; unexpected changes are preserved for reconciliation.

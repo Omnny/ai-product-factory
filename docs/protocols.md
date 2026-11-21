@@ -28,7 +28,12 @@ The orchestrator sends this as the full prompt when it launches a stage subagent
 <decisions, answers to questions, defect details, prior attempts and why they failed>
 
 ## Constraints
-- Write only to: <owned paths>
+- Write only to: <exact reserved files, including reports/config; no overlapping files>
+- Reserved IDs: <prefix: inclusive range; request another range in the report if exhausted>
+- Starting snapshot: <state active-work-order record; hashes/index/untracked inventory>
+- Check phase and scope: <specify|execute; component ARCH IDs or global>
+- Commands / coverage source set: <exact toolchain commands and component files>
+- Pending verification: <required checks deferred until initial automation exists, or none>
 - Iteration budget: <n>
 - <anything else: e.g., "do not change public interface IF-003">
 
@@ -36,8 +41,9 @@ The orchestrator sends this as the full prompt when it launches a stage subagent
 - <files / IDs to create or update>
 
 ## Exit criteria
-- <copied from docs/quality-gates.md for this stage + work-order-specific criteria>
-- `python3 scripts/trace_check.py --gate <stage>` passes for in-scope items
+- <mode-specific checklist below + applicable quality-gate criteria>
+- `python3 scripts/trace_check.py --gate <stage> [--phase specify] [--scope ARCH-###]` passes
+- <unscoped execution is mandatory when closing an aggregate gate>
 ```
 
 ## Agent Report (agent → orchestrator)
@@ -104,3 +110,20 @@ The orchestrator appends one line per event to `factory/log.md`:
 ```
 2026-11-21T11:40Z | WO-7 | design-agent | done | DES-010..DES-018 created for ARCH-002 | gate design: pass
 ```
+
+## Mode-specific completion and dispatch safety
+
+| Work-order mode | Completion evidence |
+|---|---|
+| `review` | Read-only findings against the reviewed inputs; no execution gate required |
+| `specify` | Case completeness, exact oracle sources, and `trace_check --gate <test-level> --phase specify`; no code, automation, coverage, or verdict required |
+| `author` / `revise` / `fix` | Relevant left-side checklist, using component scope where applicable; G4 uses Implementation regression before unit automation is complete |
+| `execute` | Automated cases, observed results, reports, coverage where applicable, and the execute check (default phase) |
+
+For component design, implementation, and unit orders append `--scope ARCH-###`. This is intermediate readiness only. Aggregate gates always use unscoped execute checks. Specify checks validate the paired left-side artifacts plus the requested test specification; they do not require other verification levels or generate the acceptance matrix.
+
+Before dispatch, the orchestrator persists an active-work-order record with exact write files (not just a parent directory), starting hashes and index/untracked state, ID ranges, and the chosen commands/coverage source paths. Record missing files explicitly. Existing human changes remain protected. Parallel orders need disjoint files; serialize shared configuration and aggregate reports. Unexpected changes are preserved and reconciled, never automatically reverted.
+
+The orchestrator allocates IDs, advances high-water counters, and persists ranges before dispatch. Agents never allocate from a shared "next available" number. They return partial if a range is exhausted. Keep unused numbers reserved across interruptions and cancellations.
+
+A specification or component report cannot claim an aggregate gate pass. Deferred initial automation is recorded as pending verification. A stage closes only when its own automated cases run; acceptance and CR closure permit no pending required checks. Evidence records the tested build/revision, commands, collected counts, coverage source set, and results; a comment tag establishes traceability only.

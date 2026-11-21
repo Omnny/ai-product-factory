@@ -39,11 +39,12 @@ You decide **how the system is structured**: which components exist, what each i
 5. **Choose technology.** Favor mainstream, well-supported, low-dependency options that fit the concept's constraints. Record DECs. Anything with cost, licensing, lock-in, or security implications becomes a `Q-draft` for the human.
 6. **Define the toolchain** in `factory/architecture/toolchain.md`. It is the contract every other agent uses to build and test:
    - setup or install, build, lint and format, type check
-   - unit tests **with line and branch coverage and a fail-under threshold of 100%**
+   - Implementation regression: existing unit automation without a coverage threshold on new units; explicitly defer initial empty automation
+   - component unit commands with complete source-file sets and exact test selectors, plus global unit tests **with line and branch coverage and a fail-under threshold of 100%**
    - integration tests, system tests, acceptance tests, and a command to run or start the product
    - a **fast suite** and a **slow suite**, as defined in `AGENTS.md`. The fast command is the unit command plus any in-process integration tests you list, minus any slow unit tests you list. The slow command runs the fast suite, then integration, system, and acceptance, in that order. The fast suite must stay much faster than the slow suite
    - the coverage report location and how coverage exclusions are expressed
-   - how the test directories (`tests/unit`, `tests/integration`, `tests/system`, `tests/acceptance`) are selected by each command
+   - how the test directories (`tests/unit`, `tests/integration`, `tests/system`, `tests/acceptance`) are selected by each command, with zero collection failing after a level has automation; only pre-automation higher levels may be deferred, and G8 permits no deferrals
 7. **Self-review** against G2 and run `python3 scripts/trace_check.py --gate architecture`.
 
 ## Review mode (feasibility review of requirements)

@@ -14,7 +14,7 @@ Traceability means every element can be followed from the concept down to code a
 | `EXT` | External actor or system | `factory/architecture/` | — | — |
 | `ARCH` | Architecture component | `factory/architecture/` | `Satisfies` | `REQ` |
 | `IF` | Interface between components or externals | `factory/architecture/` | `Between` (required), `Satisfies` (optional) | `ARCH`, `EXT` / `REQ` |
-| `DES` | Design unit (module, class, function group) | `factory/design/` | `Refines` | `ARCH`, `IF` (at least one `ARCH`) |
+| `DES` | Design unit (module, class, function group) | `factory/design/` | `Refines`; optional `Dependencies` | `Refines`: `ARCH`, `IF` (at least one `ARCH`); `Dependencies`: live `DES`, `IF` |
 | `UT` | Unit test case (Unit Testing ↔ Implementation) | `factory/verification/unit/` | `Verifies` | `DES` (the implemented unit) |
 | `IT` | Integration test case (Integration Testing ↔ Design) | `factory/verification/integration/` | `Verifies` | `DES`, `IF` |
 | `ST` | System test case (System Testing ↔ Architecture) | `factory/verification/system/` | `Verifies` | `ARCH`, `IF`, `SCN` |
@@ -62,7 +62,7 @@ REQ ─► AT (acceptance test of each acceptance criterion)
 - **Requirements** are the binding, testable "shall" statements. Functional requirements usually come from use case steps or stories (`Source: UC-###` and/or `US-###`). Non-functional requirements and constraints usually come straight from a concept goal (`Source: CON-###`).
 - A **scenario** is one concrete path through a use case, with specific data (the main success flow, or one extension). It covers the use case and the requirements it exercises, and system tests verify it.
 
-IDs are `PREFIX-NNN` (three or more digits), unique across the repo, and **never reused**. A retired item keeps its ID, marked `(retired)` in its heading, until downstream links have been removed.
+IDs are `PREFIX-NNN` (three or more digits), unique across the repo, and **never reused**. Before parallel dispatch, the orchestrator scans existing and retired IDs, advances state high-water counters, and persists disjoint ID ranges per work order (including DEC IDs). Agents use only reserved ranges; exhaustion returns partial. Reservations survive interruptions and unused numbers are not recycled. A retired item keeps its ID, marked `(retired)` in its heading, until downstream links have been removed.
 
 ## Syntax
 
@@ -119,18 +119,27 @@ The test *case* (in `factory/verification/<level>/` or `factory/acceptance/`) de
 | `unit` | Every `DES` (implemented unit) has a `UT` |
 | `integration` | Every internal `IF` (between two components) has an `IT`. Every component with two or more `DES` has an `IT` verifying one of its units or interfaces |
 | `system` | Every `ARCH` is exercised by an `ST`. Every external `IF` (involving an `EXT`) and every `SCN` has an `ST` |
-| `acceptance` | Every `REQ` has an `AT`. Every `CON` and `REQ` has a verdict row that is `accepted` or `waived`. Accepted `REQ` verdicts cite evidence, and all cited IDs exist |
+| `acceptance` | Every `REQ` has an `AT`. Every `CON` and `REQ` has a verdict row that is `accepted` or `waived`. Accepted CON/REQ verdicts cite live, relevant test IDs in the Evidence cell. Accepted REQs cite an AT directly verifying that REQ. Duplicate verdicts, unrelated/non-test/retired evidence, and unknown cited IDs fail; Notes never supply evidence |
 
-At every test level: each test case has a `Verifies` link and an automated test (`@test`), and every `@test` tag resolves to a case and lives in the right `tests/<level>/` directory.
+At every test level: each test case has a `Verifies` link and an automated test (`@test`), and every `@test` tag resolves to a live case and lives in the right `tests/<level>/` directory. Comment tags establish traceability; the toolchain and orchestrator must separately prove test discovery and passing execution on the reported build.
 
 Problems found at stages *beyond* the requested gate are reported as warnings, not errors.
 
 Other modes:
 
-- `--impact <ID> [<ID> ...]` prints every item downstream of the given IDs. The orchestrator uses this for change impact analysis.
+- `--impact <ID> [<ID> ...]` follows refinement and declared `Dependencies` to find downstream artifacts and callers. JSON contains `impact` (revision candidates), `regression` (conservative verification candidates including component system tests and related acceptance tests), and `minimum_suite`. Verification propagation does not automatically invalidate upstream specifications. Cross-component dependency impact and direct concept/requirements/architecture/interface changes require slow; public/shared behavior and the accumulation budget may also require slow. A graph suggestion of fast does not refresh higher-level evidence.
 - `--matrix PATH` writes the full bidirectional matrix (default `factory/trace/matrix.md` at the `acceptance` gate).
 - `--json` produces machine-readable output for automation.
+- `--phase specify --gate <unit|integration|system|acceptance>` checks the paired left-side inputs and requested cases, without code, automation, coverage, or verdicts. Other test levels do not block it; no acceptance matrix is generated.
+- `--scope ARCH-001 [ARCH-002 ...]` at design, implementation, or unit is an intermediate component check. Only other components' missing coverage obligations become warnings. Duplicates, invalid tags, orphan source, and upstream errors still block. A global gate always uses unscoped execute mode (the default).
+- `--baseline <commit> --paths <literal repository-relative paths> --json` compares committed, staged, unstaged, deleted/renamed, and non-ignored untracked files against Git. It is read-only and fails closed for missing refs/paths. Store exact owned paths with every baseline. Trace success alone cannot establish baseline integrity.
 
 ## What traceability does not prove
 
 The checker proves that a link *exists*, not that it is *correct*. Whether `UT-031` actually tests the boundary that `DES-012` specifies is a review question. That is why each gate also includes the consumer review and the checklists in [`quality-gates.md`](quality-gates.md).
+
+## Dependency and verification edges
+
+`Refines` defines derivation/ownership. A DES unit's `Dependencies` declares the live DES units or interfaces it uses; self-links, retired dependencies, and invalid target types fail. These edges are used for caller impact, not as substitutes for refinement or verification coverage. Cyclic dependencies terminate safely in impact traversal, although their design remains a review concern.
+
+The checker validates that evidence IDs are relevant to a concept/requirement through the derivation graph; it does not prove that assertions implement the intended oracle, that every acceptance criterion is tested, or that cited tests passed. Waivers still need explicit human decisions, verified by the orchestrator. Record the tested revision, commands, counts, and coverage set in the reports.

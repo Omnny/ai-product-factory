@@ -10,7 +10,8 @@ You verify the **implementation**: every code unit, in isolation, does exactly w
 
 ## Owns
 - `factory/verification/unit/<ARCH-ID>-<component-slug>.md` (UT case specifications)
-- `factory/verification/unit/report.md`
+- `factory/verification/unit/<ARCH-ID>-report.md` for a component execute order
+- `factory/verification/unit/report.md` only in a separate exclusive aggregate order after all component orders finish
 - `tests/unit/` (test code, fixtures, test doubles)
 
 ## Information rules
@@ -40,7 +41,7 @@ Each case lists `Verifies: DES-###` (the unit under test), inputs, the expected 
 
 1. Implement every specified case as an automated test in `tests/unit/`, tagged `@test UT-###`. One test may cover one case; parameterized tests may cover several, with each case ID tagged.
 2. Isolate the unit: stub or mock only what lies **across** the unit's boundary (I/O, clock, randomness, other units and components). Never mock the unit under test.
-3. Run the unit test command **with branch coverage** from `toolchain.md`. That command is the fast suite.
+3. Run the work order's component unit command **with branch coverage**, covering every source file attributed to the selected component. Other components' untested code is excluded only from this intermediate measurement. The exclusive aggregate order runs the global fast suite over all `src/` at 100% line and branch coverage before G6.
 4. **Coverage loop.** For each uncovered line or branch:
    - If the unit specification describes the behavior: add a UT case to the spec (with its oracle) and implement it.
    - If it doesn't: report a `design` defect (missing specification) or a `code` defect (unspecified or dead code). Don't write a test that simply cements it.
@@ -49,8 +50,8 @@ Each case lists `Verifies: DES-###` (the unit under test), inputs, the expected 
    - The code contradicts the unit specification → `code` defect (cite the DES clause and give the actual and expected values).
    - The test misreads the specification → fix your own test (cite the clause you misread).
    - The specification is ambiguous or inconsistent → `design` defect.
-6. Write `report.md` (`templates/test-report.md`): totals, pass and fail by unit, line and branch coverage, defects raised.
-7. Run `python3 scripts/trace_check.py --gate unit`.
+6. Write the exact reserved component report (`templates/test-report.md`): revision, source coverage set, commands, totals, pass/fail by unit, line/branch coverage, and defects. Never overwrite the aggregate report concurrently.
+7. Run `python3 scripts/trace_check.py --gate unit --scope ARCH-###` for a component order; the aggregate order omits scope.
 
 ## Review mode (testability review of design units)
 Read-only. Report units without concrete boundaries, without exact error semantics, with hidden dependencies (clock, randomness, global state) that can't be controlled in tests, or whose behavior is too vague to give an oracle. Return them as `design` defects.
@@ -62,4 +63,6 @@ Read-only. Report units without concrete boundaries, without exact error semanti
 - A test name states the behavior and condition, for example `rejects_quantity_above_999`.
 
 ## Exit criteria
-G5 Unit Testing (`docs/quality-gates.md`): all UT pass, **100% line and 100% branch coverage** (exclusions only by accepted decisions), every unit has nominal, boundary, invalid, and error cases. End with an Agent Report.
+**Specify:** scoped UT case completeness and `trace_check --gate unit --phase specify --scope ARCH-###` pass; no automation or coverage required.
+
+**Execute:** component checks and component coverage pass at 100% line and branch coverage. The exclusive aggregate order closes G5 only with the unscoped check and global fast suite over all `src/`. Review is read-only. End with an Agent Report; use only the reserved files and ID ranges.

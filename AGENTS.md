@@ -25,7 +25,9 @@ The concept (`factory/concept/`) is the factory's input, not a stage.
 4. **Independent verification.** Each right-side agent takes expected results from its paired left-side specification (Acceptance from requirements, System Testing from architecture, Integration Testing from design, Unit Testing from the unit specifications in the design), never from the implementation. The Implementation Agent never edits tests, and test agents never edit `src/`.
 5. **Baselines are immutable except through change control.** Once a stage is baselined, any edit to it goes through the orchestrator's change-impact process.
 6. **Escalate, don't guess.** If an ambiguity would change behavior a user could observe, record a question (`Q-###`) and stop work on that item.
-7. **Evidence over claims.** "Done" means the gate checks in [`docs/quality-gates.md`](docs/quality-gates.md) pass, including `python3 scripts/trace_check.py --gate <stage>`.
+7. **Evidence over claims.** Work-order completion uses mode-specific checks in [`docs/protocols.md`](docs/protocols.md). A specification or component check never closes a global gate. Closing a stage requires the full execution checklist in [`docs/quality-gates.md`](docs/quality-gates.md).
+8. **Preserve concurrent and human work.** Record exact write paths and starting file hashes before dispatch. Never restore, reset, clean, or delete unexpected changes automatically. Preserve them, report the conflict, and reconcile attribution before continuing.
+9. **Reserve IDs before parallel work.** Only the orchestrator allocates ID ranges, records their high-water marks in state, and assigns exact output paths. Agents use only their reserved IDs; unused numbers stay reserved.
 
 ## Commits
 
@@ -57,7 +59,7 @@ Product tests stay in the four V-model directories. They run as two suites. The 
 
 The **fast suite** is the default during development. It is unit tests (`tests/unit/`), with line and branch coverage. An integration test may join it only when that test stays in-process, boots nothing, and calls no real external system; the toolchain lists each such test. A unit test that is inherently slow (long generative runs, heavy fixtures, timing) is left out of the fast command and listed with the slow suite. The fast suite exists so a small change can be checked in a small fraction of the time a full run takes, and the next edit is not stuck waiting on it.
 
-The **slow suite** is the broad check. It runs bottom-up: the fast suite, then `tests/integration/`, `tests/system/`, and `tests/acceptance/`. It includes any unit test excluded from the fast command. A level that has no tests yet passes. These tests boot the product, cross real component boundaries, inject external failures, or exercise acceptance and non-functional behavior.
+The **slow suite** is the broad check. It runs bottom-up: the fast suite, then `tests/integration/`, `tests/system/`, and `tests/acceptance/`. It includes any unit test excluded from the fast command. Before a level's first execute work order, a level with no automated tests may be reported as deferred; this never counts as that level passing its gate. Once automation exists, zero collected tests is a failure. These tests boot the product, cross real component boundaries, inject external failures, or exercise acceptance and non-functional behavior.
 
 Run the **fast suite** after a small change: one design unit, the internals of one component, or a single defect whose impact stays inside that unit. On a failure, re-run the failing test first, then the fast suite.
 
@@ -66,7 +68,9 @@ Run the **slow suite** in either of these cases:
 - The change is large. It touches more than one component, a public or external interface, or behavior shared by more than one use case, or `python3 scripts/trace_check.py --impact <IDs>` reaches an `ARCH`, `IF`, `SCN`, or `REQ` outside the units just edited.
 - Small changes have accumulated. The orchestrator counts fast-only changes in `factory/state.yaml` (`progress.small_changes_since_slow_suite`). When the count reaches `budgets.small_changes_before_slow_suite` (default 5), the next change runs the slow suite. A passing slow run resets the count to 0. Splitting one large change into several small ones still trips this count.
 
-Gates G6, G7, and G8 close only after a passing slow suite. G5 closes on the fast suite with 100% line and branch coverage. G4 closes on the fast suite, and on the slow suite when one of the two cases above applies. A green slow run counts as a green fast run.
+G4 establishes implementation readiness: build, lint, type checks, and **Implementation regression** (existing unit automation without a coverage threshold) pass. Before initial unit automation exists, explicitly record it as deferred. This breaks the bootstrap cycle: the Unit Test Agent creates automation after G4. Required fast/slow verification remains pending until the test agents execute; it cannot be reported as passed or used to close a CR or acceptance.
+
+G5 closes on the fast suite with 100% line and branch coverage. A component G5 check uses the toolchain's component command and covers every source file attributed to that component; aggregate G5 requires the global fast suite over all `src/`. Gates G6, G7, and G8 close only after a passing slow suite for the levels automated so far, with the current level's cases all automated. G8 allows no deferred level. A green slow run counts as a green fast run only when its fast step actually passed.
 
 Moving a test into the fast suite to avoid a slow run, or skipping a slow run that one of these rules requires, is a broken gate.
 
@@ -91,6 +95,9 @@ The factory checker's own tests (`python3 -m unittest discover -s scripts -p 'te
 
 ## Commands
 
+- Component check (intermediate only): `python3 scripts/trace_check.py --gate design --scope ARCH-001`
+- Early test specification check: `python3 scripts/trace_check.py --gate unit --phase specify --scope ARCH-001`
+- Baseline integrity: `python3 scripts/trace_check.py --baseline <commit> --paths <owned paths> --json`
 - Traceability check: `python3 scripts/trace_check.py --gate <requirements|architecture|design|implementation|unit|integration|system|acceptance>`
 - Checker self-tests: `python3 -m unittest discover -s scripts -p 'test_*.py'`
 - Product build, lint, and test commands are chosen by the Architecture Agent and recorded in `factory/architecture/toolchain.md`. Run the fast or slow suite from there, as described under Tests.

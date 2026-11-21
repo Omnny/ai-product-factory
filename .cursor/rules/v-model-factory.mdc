@@ -18,7 +18,8 @@ V-model pairs (eight stages, no others): Requirements ↔ Acceptance, Architectu
 - Never invent scope. Untraceable behavior is a defect.
 - Expected results in tests come from the paired left-side specification, never from the current code's output.
 - Implementation never edits tests; test agents never edit `src/`.
-- Before claiming done, run `python3 scripts/trace_check.py --gate <your stage>` and the relevant commands in `factory/architecture/toolchain.md`.
+- Completion is mode-specific (`docs/protocols.md`): review returns findings; specify uses `--phase specify`; component design/implementation/unit work uses `--scope ARCH-###`. Only unscoped execute checks close global gates. G4 runs Implementation regression; initial test automation and strict coverage follow in G5. Record pending checks; never call deferred tests passed.
+- Use only exact reserved files and ID ranges from the work order. Preserve concurrent/human edits; never automatically restore/reset/clean the shared diff. Serialize shared configuration and aggregate reports.
 - Run product tests as the fast or slow suite (`AGENTS.md`). Fast is the default for a small change. Slow runs when the change is large, when small changes have accumulated past the budget, and before gates G6–G8.
 - Commit messages use Conventional Commits (`AGENTS.md`): `<type>(<scope>): <description>`, for example `chore(requirements): baseline v1`. Types are `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
 - Ambiguity that affects behavior users can observe: add a `Q-###` entry to your report and stop work on that item.

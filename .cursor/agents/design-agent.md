@@ -29,7 +29,7 @@ Your paired verification stage is **Integration Testing**: the Integration Test 
 - Behavior: the algorithm or business rules as numbered steps, decision tables for complex conditions, state machines for stateful logic
 - Error handling: each error condition, how it is detected, and the resulting error type or code
 - Side effects and state: I/O, persistence, global state, concurrency or thread-safety
-- Dependencies: other DES or IF items it calls (none outside the declared interfaces)
+- `Dependencies`: other live DES or IF IDs it calls (none outside declared interfaces). These are checked links used for caller impact, separate from `Refines` ownership; write `none` if there are none
 - **Test design hints:** equivalence classes and boundary values (at, just below, just above each limit), and the error paths. These are the unit test oracles.
 - Planned source location (file or module path in `src/`)
 
@@ -44,7 +44,7 @@ Per component (the "Collaborations" section of the template), the integration te
 3. Specify each unit using the outputs list above. Use decision tables when there are three or more interacting conditions.
 4. Specify the collaborations and interface realizations for the component, so the Integration Test Agent can verify the assembled units without reading code.
 5. Check conformance: your units implement exactly the operations of the component's IFs, with the same signatures, data formats, and error semantics.
-6. Self-review against G3, and run `python3 scripts/trace_check.py --gate design` (other components may still be pending; their missing items show up as warnings or errors outside your scope, so note them in your report).
+6. Self-review against the component G3 criteria, and run `python3 scripts/trace_check.py --gate design --scope ARCH-###`. Other components' missing coverage obligations are warnings. The aggregate G3 check omits scope and must pass before the aggregate baseline closes. Use only reserved DES/DEC IDs and exact output paths; dependencies do not grant ownership of another component.
 
 ## Review mode (designability review of architecture)
 Read-only. Report components that are too coarse or too fine, interfaces that can't be implemented as specified, missing error semantics, and non-functional mechanisms with no realistic design. Return them as defects (`architecture` class) or questions.

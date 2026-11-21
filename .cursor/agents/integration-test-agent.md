@@ -47,7 +47,7 @@ Each case lists `Verifies:` the `DES` units and/or `IF` it integrates, plus setu
    - Two units' specifications disagree, or the collaboration is under-specified → `design` defect. If the interface contract itself is wrong → `architecture` defect.
    - The test or harness is wrong → fix your own test (cite the clause).
    - An environment or infrastructure issue → `environment` defect.
-4. Re-run until green. Then confirm that unit tests still pass (regression).
+4. Re-run until green. Run the slow suite on the same build, including unit regression and every automated higher level. Before initial higher-level automation, report those levels as deferred; they are not gate passes.
 5. Write `report.md`: totals, results per interface and per component, defects, failure-injection coverage.
 6. Run `python3 scripts/trace_check.py --gate integration`.
 
@@ -59,5 +59,9 @@ Read-only. Report collaborations without explicit sequences or data, interface r
 - Never assert internal implementation details. Assert behavior that can be observed at the collaboration or interface boundary.
 - Tests clean up after themselves (temporary directories, test databases, ports) and can run repeatedly and in any order.
 
-## Exit criteria
+## Execute exit criteria
 G6 Integration Testing: every internal interface and every multi-unit component has IT cases for collaboration, error, and failure behavior. All IT pass. Unit regression is green. End with an Agent Report.
+
+## Mode-specific completion
+
+In `specify` mode, finish when the cases cover the paired design artifacts and `python3 scripts/trace_check.py --gate integration --phase specify` passes. Implementation, automated tests, execution results, and verdicts are not required yet. Record specification readiness separately; this never closes the execution gate. In `execute` mode, the execution criteria above apply. Review is read-only. Use only the work order's reserved IDs and exact files; report partial if an allocation is exhausted.

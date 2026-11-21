@@ -40,7 +40,7 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 ## G4 — Implementation
 - [ ] Mechanical: `trace_check --gate implementation` passes
 - [ ] Mechanical: the build succeeds. Lint and type checks are clean (toolchain commands)
-- [ ] Mechanical: the fast suite from `toolchain.md` passed. The slow suite passed when the change is large or `small_changes_since_slow_suite` has reached `small_changes_before_slow_suite` (`AGENTS.md`). Failures are reported, not hidden
+- [ ] Mechanical: build, lint/type checks, and Implementation regression passed. Initial empty automation is explicitly deferred, never reported green. Required strict fast/slow checks are recorded as pending until test agents execute; G4 does not require tests that can only be created after G4. Existing automated test failures block readiness
 - [ ] No code without an `@implements` tag (or a reviewed `@trace-exempt`)
 - [ ] No TODOs, stubs, or placeholder behavior in delivered code
 - [ ] No secrets or credentials in source
@@ -55,14 +55,14 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 ## G6 — Integration Testing (verifies Design)
 - [ ] Mechanical: `trace_check --gate integration` passes
 - [ ] All IT pass. Every internal interface and every multi-unit component is tested for collaboration as designed: contract conformance, data flow, error propagation, and dependency failure (timeout, unavailable, malformed response)
-- [ ] The slow suite passed on the same build (it includes the unit regression). Integration test report written
+- [ ] The slow suite passed on the same build for all levels automated so far (including unit regression and every IT). Not-yet-automated higher levels are explicitly deferred. Integration test report written
 
 ## G7 — System Testing (verifies Architecture)
 - [ ] Mechanical: `trace_check --gate system` passes
 - [ ] All ST pass on the complete system, built and started from a clean state as `toolchain.md` documents
 - [ ] Every component is exercised, every external interface is verified (including failure of external systems), and every scenario runs end to end, including failure, unusual, and edge cases
 - [ ] The architecture's non-functional mechanisms are verified at system level (performance under load, security controls, recovery)
-- [ ] The slow suite passed on the same build. System test report written
+- [ ] The slow suite passed on the same build through system testing, including every ST. Not-yet-automated acceptance is explicitly deferred. System test report written
 
 ## G8 — Acceptance (verifies Requirements; human sign-off H2 required)
 - [ ] Mechanical: `trace_check --gate acceptance` passes; `factory/trace/matrix.md` regenerated
@@ -73,3 +73,11 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 - [ ] The slow suite (all four levels, bottom-up) passes on the same build
 - [ ] Known limitations and residual risks are listed
 - [ ] The product was run from a clean checkout using the documented toolchain commands
+
+## Component and specification checkpoints
+
+`trace_check --gate <unit|integration|system|acceptance> --phase specify` validates early cases against their paired left-side inputs, without requiring implementation, automation, coverage, or acceptance verdicts. Specify completion records `spec` readiness and never closes G5–G8.
+
+`--scope ARCH-###` is available for intermediate design, implementation, and unit checks. Other components' missing coverage obligations become warnings. Upstream errors, duplicate IDs, invalid tags, and orphan source still block. Component coverage includes every source file attributed to that component; the toolchain must list exact selectors. Aggregate G3–G5 require unscoped execute checks, and aggregate G5 requires 100% line and branch coverage over all `src/` before G6 starts.
+
+Baseline integrity is an additional, read-only check: `trace_check --baseline <commit> --paths <recorded owned paths> --json`. It compares content against Git, independently of trace validity. Pending required verification blocks CR closure and H2.

@@ -10,7 +10,8 @@ Constraints:
 - Delegate every stage artifact to its stage subagent (`.cursor/agents/*-agent.md`) with a self-contained work order. Don't author artifacts yourself.
 - Launch independent work orders in parallel.
 - Ask the human only for things the factory can't decide itself. Always obtain H1 (requirements approval) and H2 (acceptance sign-off).
-- Keep `factory/state.yaml` and `factory/log.md` current after every step, so the run can resume.
+- Keep `factory/state.yaml` and `factory/log.md` current after every step. Persist exact file reservations, starting snapshots, and ID ranges before dispatch. Preserve unexpected edits; never automatically revert the shared diff.
+- Treat specify/component completion separately from global gate closure. Resume compares baseline content against Git as well as checking trace links.
 
 If `factory/concept/concept.md` still contains only the template, help the human write the concept first: ask about the problem, target users, goals, constraints, and what success looks like. Write their answers into the concept file, with their confirmation, before starting the requirements stage.
 

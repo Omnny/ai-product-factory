@@ -56,9 +56,9 @@ Right side, bottom-up execution once code exists:
 
 Rules for running work in parallel:
 
-1. A work order may start once **every artifact it reads is baselined**.
+1. Author/execute work starts once its required inputs are baselined. Consumer review reads the candidate in_review artifact. Early specify work requires its paired left-side baseline, not implementation or execution baselines.
 2. Work orders that write to **different owned paths** may run at the same time, for example Design for `ARCH-001` and Design for `ARCH-002`, or Implementation and the unit test specification for the same component.
-3. Two agents never write to the same path at the same time. The ownership map makes this automatic.
+3. Reserve exact disjoint files and ID ranges before dispatch. The ownership map alone does not prevent same-role conflicts: serialize shared build config, DEC files, and aggregate reports. Save starting hashes/index/untracked state and preserve unexpected edits; never automatically revert the shared diff.
 4. Execution order on the right side is bottom-up: there is no point running system tests on a build with failing unit tests. The *specifications* for all four levels are written early and in parallel. When a higher level runs, the levels below it run with it. During day-to-day edits the fast suite carries that check; the slow suite carries it when the change is large or small changes have accumulated (`AGENTS.md`).
 
 ### Fast and slow test suites
@@ -68,7 +68,7 @@ Product tests run as two suites, so small edits stay quick and wide risk is stil
 - **Fast** — unit tests, plus any in-process integration test the toolchain lists. Run it after every small change.
 - **Slow** — the fast suite, then integration, system, and acceptance, in that order. Run it when the change can break more than the units just edited (another component, an interface, a scenario, or a requirement), and when fast-only changes have piled up to `budgets.small_changes_before_slow_suite` (default 5). A passing slow run resets the count.
 
-Gates G6–G8 require a passing slow suite. G5 requires the fast suite at 100% line and branch coverage. The commands live in `factory/architecture/toolchain.md`.
+G4 runs Implementation regression against existing unit automation without the new-unit coverage threshold; initial missing automation is recorded as deferred. Strict fast/slow checks execute after G4 when test agents create automation, with pending obligations recorded in state. G5 requires the fast suite at 100% line and branch coverage: component commands cover their complete source sets; aggregate G5 covers all `src/`. Gates G6–G8 require a passing slow suite through the current automated level; G8 permits no deferred level. The commands live in `factory/architecture/toolchain.md`. A component/specification checkpoint is not a global gate pass.
 
 ### Incremental delivery
 
@@ -116,7 +116,7 @@ The loop for each defect is: route it, fix it, re-run the failing test, then re-
 Changes come from a human (`/factory-change`), from a defect classified as `requirement`, `architecture`, or `design`, or from a finding during review.
 
 1. The orchestrator writes `factory/changes/CR-###.md` (`templates/change-request.md`).
-2. **Impact analysis.** It identifies the directly changed IDs, then walks the trace graph *downstream* (`python3 scripts/trace_check.py --impact REQ-004`) to collect every dependent item: ARCH, IF, DES, code files, and test cases at all four verification levels.
+2. **Impact analysis.** It identifies the directly changed IDs, then runs `python3 scripts/trace_check.py --impact REQ-004 --json`. Record revision candidates (`impact`) separately from conservative verification candidates (`regression`). Dependency edges include callers; verification propagation includes affected component system tests and related acceptance tests without forcing upstream specification rework. Honor `minimum_suite` plus the behavioral and accumulation rules.
 3. It marks the affected stages `invalidated` in `state.yaml` and lists the affected IDs.
 4. It issues work orders **top-down**, limited to the affected IDs: Requirements, then Architecture, then Design, then Implementation. The paired test specifications are updated in parallel as each counterpart is re-baselined.
 5. It re-runs the fast suite when the impact stays inside the edited units, and the slow suite when the impact reaches another component, an interface, a scenario, or a requirement. The slow suite runs bottom-up, so the levels below regress as part of it.
@@ -137,3 +137,7 @@ Deleting an item retires its ID; IDs are never reused. Downstream items that onl
 Always escalate to a human for: ambiguous product intent, conflicting requirements, new or dropped scope, security, privacy, legal, or licensing decisions, paid services or new external dependencies with cost, irreversible operations, and any waiver of a gate criterion.
 
 Escalations are written to `factory/questions.md` and shown to the human together, as concrete multiple-choice options with a recommended answer whenever possible.
+
+## Resume and baseline integrity
+
+Store commit and literal owned paths with each aggregate, component, and specification checkpoint. At startup compare each record with `trace_check --baseline <commit> --paths <paths> --json`, then run the highest closed global trace gate if one exists. Trace validity cannot detect behavior changes that retain their tags. Reconcile drift with approved CRs and active work-order starting snapshots; preserve unexplained changes for review. Retain ID reservations and pending verification across interruption. An unknown ref or missing path record blocks dependent work until reconciled.

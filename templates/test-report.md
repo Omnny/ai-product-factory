@@ -3,7 +3,9 @@
 > Acceptance results are reported in `factory/acceptance/acceptance-report.md` instead.
 
 - **Owner:** <level> Test Agent
-- **Build / commit:** <hash>
+- **Build / commit:** <tested source revision; include owned-file content hashes if uncommitted>
+- **Scope:** <component ARCH ID or aggregate; component readiness never closes a global gate>
+- **Coverage source set:** <complete component files, or all src/ for aggregate G5>
 - **Date:** <ISO date>
 - **Command(s):** `<from toolchain.md>`
 - **Environment:** <OS, runtime versions, relevant config>
@@ -28,3 +30,6 @@
 
 ## Regression of lower levels
 <Results of re-running lower test levels on the same build.>
+
+## Pending verification
+<Explicit initial deferrals and required checks still pending, or none. Only an executed passing slow run resets the accumulation counter. G8 and CR closure permit no pending required verification.>

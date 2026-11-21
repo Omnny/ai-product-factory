@@ -23,7 +23,7 @@
 
 ## 4. Verdicts
 
-One row per concept goal and per requirement. The traceability checker reads this table: the first column is the ID and the second is the verdict (`accepted`, `rejected`, or `waived`). Evidence cites test IDs. A `waived` row cites the human decision in Notes.
+One row per concept goal and per requirement. The traceability checker reads this table: the first column is the ID and the second is the verdict (`accepted`, `rejected`, or `waived`). The Evidence cell cites live, relevant test IDs; Notes do not supply evidence. Each accepted REQ cites an AT directly verifying it. Duplicate verdict rows are invalid. Passing execution on the reported build is separately required. A `waived` row cites the human decision in Notes.
 
 | Item | Verdict | Evidence | Notes |
 |---|---|---|---|

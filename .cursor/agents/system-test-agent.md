@@ -48,7 +48,7 @@ Each case lists `Verifies:` the `SCN`, `ARCH`, and/or external `IF` it covers, p
    - A scenario is ambiguous or conflicts with a requirement → `requirement` defect.
    - The test or test data is wrong → fix your own test (cite the clause).
    - The environment or startup is broken → `environment` defect.
-5. Re-run until green, then confirm that the integration and unit levels are still green (regression).
+5. Re-run until green, then run the slow suite on the same build, including unit/integration regression and every automated acceptance test. Before initial acceptance automation, report acceptance as deferred; it is not a gate pass.
 6. Write `report.md`: totals, results per scenario, component, and external interface, measured non-functional values against their thresholds, defects.
 7. Run `python3 scripts/trace_check.py --gate system`.
 
@@ -60,5 +60,9 @@ Read-only. Report external interfaces without precise contracts or failure seman
 - Each test sets up its own data through external interfaces (or documented seeding commands) and cleans up afterward.
 - Non-functional measurements state their environment and the number of runs. Thresholds come only from the requirements and the architecture.
 
-## Exit criteria
+## Execute exit criteria
 G7 System Testing: every component exercised, every external interface verified (including failure of external systems), every scenario run end to end, non-functional mechanisms verified. All ST pass on a system started from a clean state. Integration and unit regression are green. End with an Agent Report.
+
+## Mode-specific completion
+
+In `specify` mode, finish when the cases cover the paired architecture artifacts and `python3 scripts/trace_check.py --gate system --phase specify` passes. Implementation, automated tests, execution results, and verdicts are not required yet. Record specification readiness separately; this never closes the execution gate. In `execute` mode, the execution criteria above apply. Review is read-only. Use only the work order's reserved IDs and exact files; report partial if an allocation is exhausted.

@@ -16,7 +16,7 @@
 ## Impact analysis
 Output of `python3 scripts/trace_check.py --impact <IDs>`:
 
-| Stage | Affected IDs / paths |
+| Stage | Revision candidates (impact) |
 |---|---|
 | Requirements | |
 | Architecture | |
@@ -26,6 +26,9 @@ Output of `python3 scripts/trace_check.py --impact <IDs>`:
 | Integration tests | |
 | System tests | |
 | Acceptance | |
+
+### Regression candidates (verification only)
+<Store the separate `regression` output and `minimum_suite`; explain any broader suite required by behavior or accumulated changes. Higher-level tests being selected does not itself change their specifications.>
 
 ## Plan
 1. WO-<n>: <agent> revise <IDs>
