@@ -31,13 +31,13 @@ You write the **production code**: exactly what the design specifies, no more an
    - Add the `@implements DES-###` tag in a comment directly above the implementing construct.
    - Keep pure logic separate from I/O, as the design specifies, so the code can be tested.
 3. Run build, lint, format check, and type check. Fix everything.
-4. Run the **full existing test suite** (all levels that have tests). Report the results honestly. You may not change tests to make them pass.
+4. Run the suite named in the work order. The default is the **fast suite** from `toolchain.md`. Run the **slow suite** when the work order says the change is large or that small changes have accumulated (`AGENTS.md`). Report which command ran and the pass and fail counts. You may not change tests to make them pass.
 5. Run `python3 scripts/trace_check.py --gate implementation`.
 
 ## Fix mode (routed `code` defect)
 1. Reproduce the failure with the exact test command from the defect.
 2. Find the root cause by comparing the code against the DES (not against the test alone).
-3. Fix the code. Re-run the failing test, then the whole level, then all lower levels.
+3. Fix the code. Re-run the failing test, then the fast suite. Run the slow suite as well when the work order requires it.
 4. If you believe the **test** or the **design** is wrong, don't work around it. Report it in your Agent Report with evidence (quote the spec clause) so the orchestrator can reclassify.
 
 ## Review mode (implementability review of design)

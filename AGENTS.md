@@ -27,6 +27,51 @@ The concept (`factory/concept/`) is the factory's input, not a stage.
 6. **Escalate, don't guess.** If an ambiguity would change behavior a user could observe, record a question (`Q-###`) and stop work on that item.
 7. **Evidence over claims.** "Done" means the gate checks in [`docs/quality-gates.md`](docs/quality-gates.md) pass, including `python3 scripts/trace_check.py --gate <stage>`.
 
+## Commits
+
+Every commit message uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/):
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+- **type** is one of `feat`, `fix`, `docs`, `test`, `refactor`, `chore`. Use `feat` for new product behavior, `fix` for a defect correction, `test` for test-only changes, `docs` for documentation, `refactor` for a behavior-preserving restructure, and `chore` for factory bookkeeping (baselines, state, tooling).
+- **scope** is the stage or area: `requirements`, `architecture`, `design`, `implementation`, `unit`, `integration`, `system`, `acceptance`, or `factory`. Omit the parentheses when no scope applies.
+- **description** is imperative present tense, with no trailing period.
+- A change that removes or alters already-accepted behavior is a breaking change: put `!` after the type or scope (`feat(requirements)!: …`) and add a `BREAKING CHANGE:` footer.
+- Baseline commits are `chore(<stage>): baseline v<N>`. The git tag stays `baseline/<stage>/v<N>`.
+- The acceptance commit is `chore(acceptance): accept v<N>`. The git tag stays `accepted/v<N>`.
+- A defect fix committed on its own is `fix(<stage>): DEF-### <what changed>`.
+- State recorded between gates is `chore(factory): <what the state change records>`.
+- The first commit of a new factory workspace is `chore: initialize the factory skeleton`.
+
+Only the Orchestrator commits during a factory run. Ad-hoc sessions follow the same syntax.
+
+## Tests
+
+Product tests stay in the four V-model directories. They run as two suites. The Architecture Agent records both commands in `factory/architecture/toolchain.md`, and every agent runs those commands from the repository root.
+
+The **fast suite** is the default during development. It is unit tests (`tests/unit/`), with line and branch coverage. An integration test may join it only when that test stays in-process, boots nothing, and calls no real external system; the toolchain lists each such test. A unit test that is inherently slow (long generative runs, heavy fixtures, timing) is left out of the fast command and listed with the slow suite. The fast suite exists so a small change can be checked in a small fraction of the time a full run takes, and the next edit is not stuck waiting on it.
+
+The **slow suite** is the broad check. It runs bottom-up: the fast suite, then `tests/integration/`, `tests/system/`, and `tests/acceptance/`. It includes any unit test excluded from the fast command. A level that has no tests yet passes. These tests boot the product, cross real component boundaries, inject external failures, or exercise acceptance and non-functional behavior.
+
+Run the **fast suite** after a small change: one design unit, the internals of one component, or a single defect whose impact stays inside that unit. On a failure, re-run the failing test first, then the fast suite.
+
+Run the **slow suite** in either of these cases:
+
+- The change is large. It touches more than one component, a public or external interface, or behavior shared by more than one use case, or `python3 scripts/trace_check.py --impact <IDs>` reaches an `ARCH`, `IF`, `SCN`, or `REQ` outside the units just edited.
+- Small changes have accumulated. The orchestrator counts fast-only changes in `factory/state.yaml` (`progress.small_changes_since_slow_suite`). When the count reaches `budgets.small_changes_before_slow_suite` (default 5), the next change runs the slow suite. A passing slow run resets the count to 0. Splitting one large change into several small ones still trips this count.
+
+Gates G6, G7, and G8 close only after a passing slow suite. G5 closes on the fast suite with 100% line and branch coverage. G4 closes on the fast suite, and on the slow suite when one of the two cases above applies. A green slow run counts as a green fast run.
+
+Moving a test into the fast suite to avoid a slow run, or skipping a slow run that one of these rules requires, is a broken gate.
+
+The factory checker's own tests (`python3 -m unittest discover -s scripts -p 'test_*.py'`) check the tooling in `scripts/`. They are separate from the product suites.
+
 ## Ownership map
 
 | Path | Owner |
@@ -48,4 +93,4 @@ The concept (`factory/concept/`) is the factory's input, not a stage.
 
 - Traceability check: `python3 scripts/trace_check.py --gate <requirements|architecture|design|implementation|unit|integration|system|acceptance>`
 - Checker self-tests: `python3 -m unittest discover -s scripts -p 'test_*.py'`
-- Product build, lint, and test commands are chosen by the Architecture Agent and recorded in `factory/architecture/toolchain.md`. Always run them from there.
+- Product build, lint, and test commands are chosen by the Architecture Agent and recorded in `factory/architecture/toolchain.md`. Run the fast or slow suite from there, as described under Tests.

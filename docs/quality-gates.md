@@ -26,7 +26,7 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 - [ ] Every non-functional requirement has an architectural mechanism (for example a cache for performance, authentication middleware for security)
 - [ ] Runtime sequences exist for every use case's main flow, and for extensions that cross component or system boundaries
 - [ ] Technology choices recorded as `DEC-###` with alternatives considered
-- [ ] `factory/architecture/toolchain.md` defines working commands for build, lint, unit tests with coverage, integration tests, system tests, acceptance tests, and run
+- [ ] `factory/architecture/toolchain.md` defines working commands for build, lint, unit tests with coverage, integration tests, system tests, acceptance tests, the fast suite, the slow suite, and run
 - [ ] Consumer review: Design Agent (designability) and System Test Agent (testability of the system as architected) report no blocking findings
 
 ## G3 — Design
@@ -40,14 +40,14 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 ## G4 — Implementation
 - [ ] Mechanical: `trace_check --gate implementation` passes
 - [ ] Mechanical: the build succeeds. Lint and type checks are clean (toolchain commands)
-- [ ] Mechanical: the complete existing test suite was run; any failures are reported, not hidden
+- [ ] Mechanical: the fast suite from `toolchain.md` passed. The slow suite passed when the change is large or `small_changes_since_slow_suite` has reached `small_changes_before_slow_suite` (`AGENTS.md`). Failures are reported, not hidden
 - [ ] No code without an `@implements` tag (or a reviewed `@trace-exempt`)
 - [ ] No TODOs, stubs, or placeholder behavior in delivered code
 - [ ] No secrets or credentials in source
 
 ## G5 — Unit Testing (verifies Implementation)
 - [ ] Mechanical: `trace_check --gate unit` passes
-- [ ] All UT pass. **100% line and 100% branch coverage** of `src/`. Every exclusion is backed by an accepted `DEC-###`
+- [ ] The fast suite passed: all UT pass, with **100% line and 100% branch coverage** of `src/`. Every exclusion is backed by an accepted `DEC-###`
 - [ ] For each implemented unit (`DES`), the cases include nominal, boundary (at, just below, and just above each limit), invalid input, and each error path
 - [ ] Unit test report written
 - [ ] Recommended: mutation testing score ≥ 80% on core logic, to show the tests actually detect faults
@@ -55,14 +55,14 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 ## G6 — Integration Testing (verifies Design)
 - [ ] Mechanical: `trace_check --gate integration` passes
 - [ ] All IT pass. Every internal interface and every multi-unit component is tested for collaboration as designed: contract conformance, data flow, error propagation, and dependency failure (timeout, unavailable, malformed response)
-- [ ] Unit regression green on the same build. Integration test report written
+- [ ] The slow suite passed on the same build (it includes the unit regression). Integration test report written
 
 ## G7 — System Testing (verifies Architecture)
 - [ ] Mechanical: `trace_check --gate system` passes
 - [ ] All ST pass on the complete system, built and started from a clean state as `toolchain.md` documents
 - [ ] Every component is exercised, every external interface is verified (including failure of external systems), and every scenario runs end to end, including failure, unusual, and edge cases
 - [ ] The architecture's non-functional mechanisms are verified at system level (performance under load, security controls, recovery)
-- [ ] Integration and unit regression green on the same build. System test report written
+- [ ] The slow suite passed on the same build. System test report written
 
 ## G8 — Acceptance (verifies Requirements; human sign-off H2 required)
 - [ ] Mechanical: `trace_check --gate acceptance` passes; `factory/trace/matrix.md` regenerated
@@ -70,6 +70,6 @@ There is one gate per V-model stage (G1–G8). Each gate is a checklist the owni
 - [ ] Every `CON` and every `REQ` has a verdict with evidence (test IDs, report references)
 - [ ] Every `waived` verdict has an explicit human decision recorded
 - [ ] No open defects of severity `critical` or `major`
-- [ ] Full regression (all four levels) passes on the same build
+- [ ] The slow suite (all four levels, bottom-up) passes on the same build
 - [ ] Known limitations and residual risks are listed
 - [ ] The product was run from a clean checkout using the documented toolchain commands

@@ -40,7 +40,7 @@ Each case lists `Verifies: REQ-###`, preconditions, steps through public entry p
 
 ## Execute mode (after the system level is green, G7)
 
-1. **Run from a clean state.** Following `toolchain.md`, build and start the product from a clean checkout, then run the **full regression** of all four levels (unit, integration, system, acceptance). Record the commands and results. Stale reports are not evidence.
+1. **Run from a clean state.** Following `toolchain.md`, build and start the product from a clean checkout, then run the **slow suite** (fast suite, then integration, system, and acceptance). Record the commands and results. Stale reports are not evidence.
 2. **Automate and run the acceptance tests** in `tests/acceptance/`, tagged `@test AT-###`, through public entry points only. Triage failures:
    - The product doesn't meet a requirement → `code` defect (state the REQ, the criterion, the steps, and the actual and expected results).
    - The requirement is ambiguous or conflicts with another → `requirement` defect (may need the human).

@@ -49,6 +49,7 @@ budgets:
   fix_iterations_per_defect: 3
   rework_cycles_per_gate: 3
   stall_limit: 5
+  small_changes_before_slow_suite: 5   # fast-only changes before the next change must run the slow suite
 
 counters:                     # last issued number per record type
   WO: 0
@@ -58,6 +59,7 @@ counters:                     # last issued number per record type
 
 progress:
   work_orders_since_gate_progress: 0
+  small_changes_since_slow_suite: 0    # reset to 0 after a passing slow suite
 
 open:
   questions: []               # Q-###

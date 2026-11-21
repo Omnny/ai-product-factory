@@ -33,7 +33,7 @@ not_started → in_progress → in_review → baselined
 
 - **in_progress**: the owning agent is working on the stage.
 - **in_review**: the agent says it is done. The orchestrator runs the gate checks and a *consumer review*: the agents that depend on the artifact review it. These are the next agent down the left side, plus the paired verifying agent on the right side (for example, the Architecture Agent reviews the requirements for feasibility, and the Acceptance Agent reviews them for testability).
-- **baselined**: the gate passed. The orchestrator records the baseline (git commit `factory: baseline <stage> vN`) and dependent work may begin.
+- **baselined**: the gate passed. The orchestrator records the baseline (commit `chore(<stage>): baseline vN`, tag `baseline/<stage>/vN`) and dependent work may begin. Commit messages follow Conventional Commits (`AGENTS.md`).
 - **invalidated**: an upstream change or a specification defect affects this stage. Only the affected items are reworked (see section 6).
 
 ## 3. Flow and parallelism
@@ -59,7 +59,16 @@ Rules for running work in parallel:
 1. A work order may start once **every artifact it reads is baselined**.
 2. Work orders that write to **different owned paths** may run at the same time, for example Design for `ARCH-001` and Design for `ARCH-002`, or Implementation and the unit test specification for the same component.
 3. Two agents never write to the same path at the same time. The ownership map makes this automatic.
-4. Execution order on the right side is bottom-up: there is no point running system tests on a build with failing unit tests. The *specifications* for all four levels are written early and in parallel. Each time a level runs, all lower levels are re-run as regression.
+4. Execution order on the right side is bottom-up: there is no point running system tests on a build with failing unit tests. The *specifications* for all four levels are written early and in parallel. When a higher level runs, the levels below it run with it. During day-to-day edits the fast suite carries that check; the slow suite carries it when the change is large or small changes have accumulated (`AGENTS.md`).
+
+### Fast and slow test suites
+
+Product tests run as two suites, so small edits stay quick and wide risk is still checked.
+
+- **Fast** — unit tests, plus any in-process integration test the toolchain lists. Run it after every small change.
+- **Slow** — the fast suite, then integration, system, and acceptance, in that order. Run it when the change can break more than the units just edited (another component, an interface, a scenario, or a requirement), and when fast-only changes have piled up to `budgets.small_changes_before_slow_suite` (default 5). A passing slow run resets the count.
+
+Gates G6–G8 require a passing slow suite. G5 requires the fast suite at 100% line and branch coverage. The commands live in `factory/architecture/toolchain.md`.
 
 ### Incremental delivery
 
@@ -95,7 +104,7 @@ When a test fails, the agent that owns the test writes a **defect report** (`tem
 | `requirement` | The requirement is ambiguous, contradictory, or untestable | Requirements Agent, plus a **human question** if behavior a user could observe would change |
 | `environment` | Toolchain, flaky infrastructure, or test harness | Owner of the toolchain (Architecture) or of the harness (the test agent) |
 
-The loop for each defect is: route it, fix it, re-run the failing test, then re-run that whole level and all levels below it.
+The loop for each defect is: route it, fix it, re-run the failing test, then re-run the fast suite. Run the slow suite when the fix is a large change or when fast-only changes since the last slow run have reached the budget (`AGENTS.md`).
 
 **Anti-gaming rules.** A defect may not be "fixed" by:
 - weakening, skipping, or deleting a test without a `test` classification that cites the specification;
@@ -110,8 +119,8 @@ Changes come from a human (`/factory-change`), from a defect classified as `requ
 2. **Impact analysis.** It identifies the directly changed IDs, then walks the trace graph *downstream* (`python3 scripts/trace_check.py --impact REQ-004`) to collect every dependent item: ARCH, IF, DES, code files, and test cases at all four verification levels.
 3. It marks the affected stages `invalidated` in `state.yaml` and lists the affected IDs.
 4. It issues work orders **top-down**, limited to the affected IDs: Requirements, then Architecture, then Design, then Implementation. The paired test specifications are updated in parallel as each counterpart is re-baselined.
-5. It re-runs verification bottom-up for the affected items (unit, integration, system), with full regression at each level.
-6. Acceptance re-runs the affected acceptance tests and re-evaluates the affected `CON` and `REQ` verdicts. A human signs off again if H1 or H2 is affected.
+5. It re-runs the fast suite when the impact stays inside the edited units, and the slow suite when the impact reaches another component, an interface, a scenario, or a requirement. The slow suite runs bottom-up, so the levels below regress as part of it.
+6. Acceptance re-evaluates the affected `CON` and `REQ` verdicts from the slow run when acceptance tests are in the impact set. A human signs off again if H1 or H2 is affected.
 7. The CR is closed with links to the new baselines.
 
 Deleting an item retires its ID; IDs are never reused. Downstream items that only trace to a retired ID must be removed or re-traced.
@@ -123,6 +132,7 @@ Deleting an item retires its ID; IDs are never reused. Downstream items that onl
 | Fix iterations per defect | 3 | Re-classify (is it really a spec issue?), then escalate to human |
 | Rework cycles per gate | 3 | Escalate with a summary of the recurring failure |
 | Consecutive work orders without gate progress | 5 | Stop and report the stall |
+| Fast-only changes before a slow-suite run | 5 | The next change runs the slow suite, then the count resets |
 
 Always escalate to a human for: ambiguous product intent, conflicting requirements, new or dropped scope, security, privacy, legal, or licensing decisions, paid services or new external dependencies with cost, irreversible operations, and any waiver of a gate criterion.
 

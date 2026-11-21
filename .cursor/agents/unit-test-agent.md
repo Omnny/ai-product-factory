@@ -40,7 +40,7 @@ Each case lists `Verifies: DES-###` (the unit under test), inputs, the expected 
 
 1. Implement every specified case as an automated test in `tests/unit/`, tagged `@test UT-###`. One test may cover one case; parameterized tests may cover several, with each case ID tagged.
 2. Isolate the unit: stub or mock only what lies **across** the unit's boundary (I/O, clock, randomness, other units and components). Never mock the unit under test.
-3. Run the unit test command **with branch coverage** from `toolchain.md`.
+3. Run the unit test command **with branch coverage** from `toolchain.md`. That command is the fast suite.
 4. **Coverage loop.** For each uncovered line or branch:
    - If the unit specification describes the behavior: add a UT case to the spec (with its oracle) and implement it.
    - If it doesn't: report a `design` defect (missing specification) or a `code` defect (unspecified or dead code). Don't write a test that simply cements it.

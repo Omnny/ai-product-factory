@@ -50,7 +50,7 @@ Launch them with the Task tool (`subagent_type` matching the agent `name`; the g
 ## 3. Startup procedure
 
 1. Read `AGENTS.md`, `docs/process.md`, `docs/quality-gates.md`, `docs/protocols.md`, `docs/traceability.md`.
-2. If the workspace isn't a git repository, run `git init` and make an initial commit of the factory skeleton.
+2. If the workspace isn't a git repository, run `git init` and make an initial commit of the factory skeleton: `chore: initialize the factory skeleton`. Every commit in this repo uses Conventional Commits, as specified in `AGENTS.md`.
 3. Load `factory/state.yaml`. If anything is `in_progress` from an interrupted run, check its outputs on disk and resume or restart that work order.
 4. Run `python3 scripts/trace_check.py --gate <highest baselined stage>`. If a baselined stage fails, someone edited it outside change control. Open a CR for it before doing anything else.
 5. Read `factory/questions.md`. If the human has answered questions, apply the answers (send revise work orders to the owners).
@@ -72,10 +72,12 @@ loop:
       validate report (section 6)
       record questions/defects with real IDs; update state; log
   for each stage now claiming done → evaluate gate (section 7)
-  commit state changes
+  commit state changes as `chore(factory): <imperative summary>`
 ```
 
 Prefer finishing a level before widening scope. Bottom-up execution on the right side is mandatory: unit tests pass before integration tests run, integration before system, and system before acceptance.
+
+Choose the test suite (`AGENTS.md`) before every implementation or fix work order, and write the choice into the work order. A small change runs the fast suite; increment `progress.small_changes_since_slow_suite`. A large change, or a count that has reached `budgets.small_changes_before_slow_suite`, runs the slow suite. A passing slow run resets the count to 0. Gates G6, G7, and G8 always run the slow suite.
 
 ## 5. Scheduling rules (work order catalog)
 
@@ -98,7 +100,7 @@ Each right-side agent **specifies** its tests as soon as its paired left-side st
 | 13 | `unit-test-agent` execute, per component | 10 + 12 done for that component; G4 passes for it | other components |
 | 14 | `integration-test-agent` execute | all components unit-green: G5 (all UT pass, 100% coverage) | — |
 | 15 | `system-test-agent` execute | G6 integration-green | — |
-| 16 | `acceptance-agent` execute (full regression, AT run, verdicts, report) | G7 system-green | — |
+| 16 | `acceptance-agent` execute (slow suite, AT run, verdicts, report) | G7 system-green | — |
 | 17 | **H2** human sign-off | G8 mechanical checks pass, acceptance report complete | — |
 
 Small products with a single component still go through every row, but rows 7 and 9–13 run once.
@@ -124,7 +126,7 @@ When a stage's owner reports `done`:
 4. If any check or review finding fails: send a `revise` work order to the owner with the findings, increment `rework_cycles` for the gate, and go back to step 2 when the owner reports done. If the rework budget runs out, escalate.
 5. If everything passes:
    - For H1 and H2, ask the human for approval (section 9) and record their decision in state.
-   - Commit the work with `factory: baseline <stage> v<N>` and tag it `baseline/<stage>/v<N>`. Record the commit hash in `state.yaml`.
+   - Commit the work as `chore(<stage>): baseline v<N>` and tag it `baseline/<stage>/v<N>`. Record the commit hash in `state.yaml`. The tag keeps its existing form; only the commit message is Conventional Commits.
    - Set the stage to `baselined` and unblock dependent work orders.
 
 ## 8. Defect routing
@@ -133,7 +135,7 @@ Every failing test or review finding becomes a `DEF-###` with a classification (
 
 | Class | Route to | Then |
 |---|---|---|
-| `code` | `implementation-agent` fix | re-run the failing test, then the whole level, then all lower levels |
+| `code` | `implementation-agent` fix | re-run the failing test, then the fast suite; run the slow suite when the change is large or the accumulation budget is spent |
 | `test` | owning test agent fix (it must cite the specification clause it misread) | re-run the level |
 | `design` | `design-agent` revise, then the downstream impact process (section 10) | — |
 | `architecture` | `architecture-agent` revise, then the downstream impact process | — |
@@ -163,7 +165,7 @@ Triggered by `/factory-change`, a `requirement`/`architecture`/`design` defect, 
 4. If the change alters scope or behavior a user could observe, get human approval of the CR (and therefore of the H1 baseline).
 5. Mark affected stages and components `invalidated` and list the IDs in `state.invalidated`.
 6. Issue scoped `revise` work orders **top-down** (requirements, then architecture, then design, then implementation). Each one lists exactly the affected IDs. Each right-side agent gets a `specify` (revise) work order as soon as its paired stage is re-baselined: Acceptance after Requirements, System Testing after Architecture, Integration and Unit Testing after Design.
-7. Re-verify bottom-up (unit, integration, system, each with regression of the levels below). Then acceptance re-runs the affected AT cases and re-evaluates the affected CON and REQ verdicts (H2 again if acceptance was already signed).
+7. Re-verify with the suite the impact requires: the fast suite when the impact stays inside the edited units, the slow suite when it reaches another component, an interface, a scenario, or a requirement. The slow suite runs bottom-up. Then acceptance re-evaluates the affected CON and REQ verdicts from that run (H2 again if acceptance was already signed).
 8. Close the CR with the new baseline tags.
 
 ## 11. Budgets, stall detection, finishing
@@ -172,7 +174,7 @@ Triggered by `/factory-change`, a `requirement`/`architecture`/`design` defect, 
 - **Stall:** `stall_limit` consecutive work orders with no gate progress and no reduction in open defects. Stop, summarize what keeps failing and why, and ask the human for direction.
 - **Finish** when H2 is signed:
   1. Run `python3 scripts/trace_check.py --gate acceptance` (this regenerates `factory/trace/matrix.md`).
-  2. Commit and tag `accepted/v<N>`.
+  2. Commit `chore(acceptance): accept v<N>` and tag `accepted/v<N>`.
   3. Give the human a final summary: what was built, how to run it, evidence (test totals, coverage, trace status), waivers, and known limitations.
 
 ## 12. Writing good work orders
