@@ -19,7 +19,7 @@ Because AI makes tests cheap to write and run, the factory doesn't compromise on
 
 ## The agents
 
-There are eight stage agents, one per V-model stage, coordinated by the orchestrator. Each pair works on the same level of the V:
+There are eight stage agents, one per V-model stage, coordinated by the orchestrator. A Memory Agent supports the orchestrator alongside them. Each stage pair works on the same level of the V:
 
 | Level | Left side: building | Agent spec | ↔ | Right side: verifying | Agent spec |
 |---|---|---|---|---|---|
@@ -29,6 +29,8 @@ There are eight stage agents, one per V-model stage, coordinated by the orchestr
 | 4 | **Implementation**: code exactly as designed | [`implementation-agent.md`](.cursor/agents/implementation-agent.md) | ↔ | **Unit Testing**: every code unit against its specification, with 100% line and branch coverage | [`unit-test-agent.md`](.cursor/agents/unit-test-agent.md) |
 
 The **Orchestrator** ([`orchestrator.md`](.cursor/agents/orchestrator.md)) runs as the top-level chat session. It schedules work, in parallel where possible, validates every agent's report against evidence, enforces the eight quality gates, routes defects, analyzes change impact, and asks you for the decisions only a human can make.
+
+**Memory Agent** ([`memory-agent.md`](.cursor/agents/memory-agent.md)): called by the orchestrator to create and maintain [`factory/memory.md`](factory/memory.md). It keeps a condensed account of the project's purpose, build history, important decisions, major issues, their root causes, and the regression tests that check the original conditions. The orchestrator reads it when a run starts and uses relevant lessons before assigning work. Memory links back to the source records and stays within each receiving agent's information rules; it does not replace specifications or test evidence.
 
 Each agent owns specific files and **never edits another agent's files**. Each verifying agent takes its expected results from the specification on its own level of the V, never from the code. The implementation agent can't touch tests, and test agents can't touch code. That separation of duties is what turns "the AI says it works" into evidence.
 
@@ -72,7 +74,7 @@ Details: [`docs/process.md`](docs/process.md).
 
 ```
 .cursor/
-  agents/          Agent specifications (orchestrator + 8 stage agents) — the agent logic lives here
+  agents/          Agent specifications (orchestrator + 8 stage agents + memory agent) — the agent logic lives here
   commands/        /factory and /factory-change entry points
   rules/           Always-on factory rules for every agent
 docs/
@@ -88,6 +90,7 @@ factory/
   requirements/  architecture/  design/       Left-side artifacts
   verification/{unit,integration,system}/  acceptance/   Right-side test specs and reports
   state.yaml  log.md  questions.md  defects/  changes/  decisions/  trace/
+  memory.md        Condensed project purpose, history, causes, and regression guards (Memory Agent)
 src/               Product code (Implementation Agent)
 tests/             unit/  integration/  system/  acceptance/  (one agent per level)
 scripts/           trace_check.py (traceability checker) and its tests
@@ -101,6 +104,7 @@ scripts/           trace_check.py (traceability checker) and its tests
 4. **Comprehensive testing is the default.** That means 100% unit line and branch coverage, every interface integrated, every scenario run end to end, and every requirement accepted against its criteria.
 5. **Loops instead of a single pass.** The agents test, fix, and test again until the gate passes, within an iteration budget. When the budget runs out, the factory asks a human.
 6. **Humans decide what only humans can.** That includes product goals, ambiguities, trade-offs, and final acceptance.
+7. **Every bug fix includes a regression test.** The test reproduces the original condition, fails on the buggy revision for the expected reason, and passes after the fix. The defect record retains the evidence, and the Memory Agent preserves the cause, correction, and what to check if the problem appears again.
 
 ## Specification, component, and baseline checks
 
@@ -114,3 +118,9 @@ python3 scripts/trace_check.py --impact DES-001 --json
 ```
 
 Global gates use the original execute checks without a scope restriction. At G4, Implementation regression runs the existing automated unit tests. The initial test automation and strict coverage checks follow after G4, and verification that is still pending is recorded explicitly. Aggregate G5 still requires 100% line and branch coverage over all source files. Change impact separates artifacts that may need revision from tests that may need to run again. When a run resumes, the factory compares baseline content with Git separately from checking trace links. Before work starts in parallel, the orchestrator reserves the exact files and ID ranges and saves snapshots of their starting state. Unexpected changes are preserved until they can be reconciled.
+
+## Persistent project memory
+
+The orchestrator calls the Memory Agent through the same work-order protocol as the stage agents. It creates the summary from available project records, then refreshes it after meaningful build milestones, decisions, verified fix evidence, and changes, and before handoff or acceptance. Pending memory work is recorded in `factory/state.yaml` and survives interruption.
+
+The summary stays condensed so that a new session can understand why the project exists, how it reached its current state, and which earlier failures matter now. Detailed history remains in the log, commits, decisions, defects, and test reports. Only the Memory Agent writes the summary during a run. The orchestrator checks its sources and passes allowed excerpts to other agents; the full memory can contain details that independent verifying agents must not read.

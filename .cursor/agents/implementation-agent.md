@@ -37,7 +37,7 @@ You write the **production code**: exactly what the design specifies, no more an
 ## Fix mode (routed `code` defect)
 1. Reproduce the failure with the exact test command from the defect.
 2. Find the root cause by comparing the code against the DES (not against the test alone).
-3. Fix the code. Re-run the failing test, then the fast suite. Run the slow suite as well when the work order requires it.
+3. Confirm that the test owner has added or extended an automated regression for the exact original condition. Do not write or edit that test yourself. If it is missing, report the gap to the orchestrator and keep verification pending. Fix the code, record the confirmed root cause and correction, and re-run the regression, then the fast suite. Run the slow suite as well when the work order requires it. Include the original trigger, buggy and fixed revisions, test reference, and observed results in your report for the defect record and Memory Agent; the test owner and orchestrator verify the before/after evidence.
 4. If you believe the **test** or the **design** is wrong, don't work around it. Report it in your Agent Report with evidence (quote the spec clause) so the orchestrator can reclassify.
 
 ## Review mode (implementability review of design)

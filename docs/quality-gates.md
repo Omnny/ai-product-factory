@@ -81,3 +81,13 @@ Each V-model stage has one gate (G1–G8). The agent responsible for the stage c
 Use `--scope ARCH-###` for intermediate checks of a component's design, implementation, and unit tests. Missing coverage for other components is reported as a warning. Upstream errors, duplicate IDs, invalid tags, and source files without traceability still block the check. Component coverage includes every source file attributed to that component, and the toolchain must list the exact selectors. Aggregate G3–G5 require execute checks without a scope restriction. Before G6 starts, aggregate G5 requires 100% line and branch coverage over all `src/`.
 
 Baseline integrity has its own read-only check: `trace_check --baseline <commit> --paths <recorded owned paths> --json`. It compares content against Git separately from checking whether trace links are valid. A CR cannot close and H2 cannot pass while required verification is still pending.
+
+## Regression tests for fixed bugs
+
+Every bug fix includes an automated regression test for the original triggering condition. The responsible test agent adds or extends the case and records the fixture or fault, the authoritative expected result, the buggy revision and expected failing result, the fixed revision and passing result, and the required suite results. Factory-tooling and process checks use their executable test names and paths instead of product trace IDs.
+
+An existing test counts only if it already reproduces the exact original condition and has the required before/after evidence. If that evidence requires an earlier revision, use an isolated copy; never reset shared work. Keep a defect unverified until the cause and regression evidence are confirmed. A general green suite is not enough. The original defect record retains the detail, and the Memory Agent records the cause, correction, regression guard, and what to check next time before the defect closes as fixed.
+
+## Memory at handoff and acceptance
+
+Memory support work has no V-model gate. The orchestrator validates its summary against primary records and retains unresolved source conflicts or evidence gaps in state. Before closing a related defect or CR, handing off a run, or requesting H2, reconcile the relevant memory events. Record the final H2 decision in memory before the acceptance commit. A memory note never replaces test results or changes an agent's information rules.

@@ -67,6 +67,18 @@ stages:
     recommendation: null
     human_signoff: null       # H2: { decision: accepted|rejected, date: ..., notes: ... }
 
+# Support work, outside the eight stages. Orchestrator owns these fields;
+# Memory Agent owns only factory/memory.md. Events survive interruptions.
+memory:
+  path: factory/memory.md
+  status: pending             # not_started | pending | in_progress | current | blocked
+  last_source_commit: null    # provenance of reviewed sources, not a HEAD-equality freshness check
+  last_work_order: null
+  reviewed_events: []         # existing baseline / WO / DEF / CR / DEC references
+  pending_events:
+    - trigger: initial_memory_review
+      sources: [factory/memory.md, README.md, factory/state.yaml, scripts/test_trace_check.py]
+
 budgets:
   fix_iterations_per_defect: 3
   rework_cycles_per_gate: 3

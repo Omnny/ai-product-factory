@@ -143,3 +143,9 @@ The checker proves that a link *exists*. Whether that link is *correct* still ne
 `Refines` defines derivation and ownership. A DES unit's `Dependencies` field declares the live DES units or interfaces it uses. Links to itself, retired dependencies, and invalid target types fail the check. These links help determine the impact on callers. They do not replace refinement links or verification coverage. Impact analysis terminates safely even when dependencies form a cycle, although that design still needs review.
 
 The checker follows the derivation graph to verify that evidence IDs are relevant to a concept or requirement. It does not prove that assertions check the intended expected results, that every acceptance criterion is tested, or that the cited tests passed. Waivers still require explicit human decisions, which the orchestrator verifies. Reports record the tested revision, commands, counts, and source files included in coverage.
+
+## Memory and regression references
+
+`factory/memory.md` is a condensed summary of existing records. The Memory Agent cites their IDs, paths, revisions, and tests without defining new trace items or introducing a memory stage. The checker does not parse this summary as specifications or acceptance verdicts. Current stage artifacts remain authoritative even when memory contains an earlier version of an item.
+
+A fixed bug links its original condition and confirmed cause to an automated regression guard in its defect record. Product regression tests use the existing UT/IT/ST/AT IDs and tags. Factory-tooling checks use executable test names and paths. Before/after results and source revisions are verified by the orchestrator, then summarized in memory; trace links alone do not prove that the regression ran or that the fix prevents the original failure.

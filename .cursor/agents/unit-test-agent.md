@@ -66,3 +66,11 @@ Read-only. Report units without concrete boundaries, without exact error semanti
 **Specify:** scoped UT case completeness and `trace_check --gate unit --phase specify --scope ARCH-###` pass; no automation or coverage required.
 
 **Execute:** component checks and component coverage pass at 100% line and branch coverage. The exclusive aggregate order closes G5 only with the unscoped check and global fast suite over all `src/`. Review is read-only. End with an Agent Report; use only the reserved files and ID ranges.
+
+## Regression tests for bug fixes
+
+For a routed bug, add or extend an automated test in your owned level that reproduces the exact original input, state, sequence, boundary, or injected fault. Keep the expected result grounded in your permitted specification, not memory or current code behavior. An existing test counts only if it already covers that condition and has the required before/after evidence. For a test or harness bug, the guard must detect the original bad setup or false acceptance.
+
+You may run this reproduction against the known buggy build before the ordinary execution prerequisites for a routed defect. Record the buggy revision, exact command, and failure that demonstrates the bug for the expected reason. After the owner fixes it, run the same regression and the required suite on the fixed build. If the old revision is needed after the fix, use an isolated copy and never reset shared work. If the condition cannot yet be reproduced or automated, report the blocker and leave verification pending.
+
+Your report supplies the original condition, confirmed test evidence, case ID/path, revisions, commands, and results to the orchestrator. The Memory Agent uses the validated defect and report to retain the lesson. You do not edit project memory or product code, and the defect cannot close as fixed on a green suite alone.

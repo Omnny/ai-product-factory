@@ -7,7 +7,7 @@ alwaysApply: true
 
 This repo is an AI Product Factory. Read `AGENTS.md` before acting.
 
-V-model pairs (eight stages, no others): Requirements ↔ Acceptance, Architecture ↔ System Testing, Design ↔ Integration Testing, Implementation ↔ Unit Testing. The concept is the factory's input, not a stage.
+V-model pairs (eight stages, no others): Requirements ↔ Acceptance, Architecture ↔ System Testing, Design ↔ Integration Testing, Implementation ↔ Unit Testing. The concept is the factory's input, not a stage. The Memory Agent supports the orchestrator and maintains `factory/memory.md`; it is not a stage or gate.
 
 - Only edit paths your role owns (see the ownership map in `AGENTS.md`). Report upstream problems; don't fix them in place.
 - Every item you create gets an ID and an upstream link (`docs/traceability.md`):
@@ -23,3 +23,6 @@ V-model pairs (eight stages, no others): Requirements ↔ Acceptance, Architectu
 - Run product tests as the fast or slow suite (`AGENTS.md`). Fast is the default for a small change. Slow runs when the change is large, when small changes have accumulated past the budget, and before gates G6–G8.
 - Commit messages use Conventional Commits (`AGENTS.md`): `<type>(<scope>): <description>`, for example `chore(requirements): baseline v1`. Types are `feat`, `fix`, `docs`, `test`, `refactor`, `chore`.
 - Ambiguity that affects behavior users can observe: add a `Q-###` entry to your report and stop work on that item.
+
+- Every bug fix includes an automated regression test for the original triggering condition. Record the confirmed cause, test ID or tooling test name, failing-before evidence, and passing-after evidence. Keep the defect unverified until that evidence exists; a green suite or a written lesson alone is insufficient. Product tests stay with their owning test agent.
+- The orchestrator reads project memory at startup, consults relevant lessons before work, and calls `memory-agent` after meaningful milestones and independently verified fix evidence. Only the Memory Agent writes the memory file during a run. Memory is a source-linked summary, never a specification, approval, or test oracle. Filter excerpts according to the receiving agent's information rules.

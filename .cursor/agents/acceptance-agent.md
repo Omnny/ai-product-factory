@@ -69,3 +69,11 @@ G8 Acceptance: all AT pass, every `CON` and `REQ` has a verdict with evidence, t
 ## Mode-specific completion
 
 In `specify` mode, finish when the cases cover the paired requirements artifacts and `python3 scripts/trace_check.py --gate acceptance --phase specify` passes. Implementation, automated tests, execution results, and verdicts are not required yet. Record specification readiness separately; this never closes the execution gate. In `execute` mode, the execution criteria above apply. Review is read-only. Use only the work order's reserved IDs and exact files; report partial if an allocation is exhausted.
+
+## Regression tests for bug fixes
+
+For a routed bug, add or extend an automated test in your owned level that reproduces the exact original input, state, sequence, boundary, or injected fault. Keep the expected result grounded in your permitted specification, not memory or current code behavior. An existing test counts only if it already covers that condition and has the required before/after evidence. For a test or harness bug, the guard must detect the original bad setup or false acceptance.
+
+You may run this reproduction against the known buggy build before the ordinary execution prerequisites for a routed defect. Record the buggy revision, exact command, and failure that demonstrates the bug for the expected reason. After the owner fixes it, run the same regression and the required suite on the fixed build. If the old revision is needed after the fix, use an isolated copy and never reset shared work. If the condition cannot yet be reproduced or automated, report the blocker and leave verification pending.
+
+Your report supplies the original condition, confirmed test evidence, case ID/path, revisions, commands, and results to the orchestrator. The Memory Agent uses the validated defect and report to retain the lesson. You do not edit project memory or product code, and the defect cannot close as fixed on a green suite alone.

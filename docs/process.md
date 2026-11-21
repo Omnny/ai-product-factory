@@ -17,6 +17,8 @@ The factory has exactly the eight V-model stages: four on the left side (buildin
 
 The **concept** (`factory/concept/concept.md`) is not a stage. It is the factory's *input*: the human's refined product idea, whose goals are numbered `CON-###` so that requirements and the final acceptance verdicts can be traced back to it.
 
+The Memory Agent supports the orchestrator alongside these eight stages. It maintains `factory/memory.md`, a condensed account of the project's purpose, build history, important decisions, major issues, root causes, and regression guards. It adds no stage or gate.
+
 Each pair is a **contract**. A right-side agent writes its test specification from its left-side counterpart **as soon as that counterpart is baselined**, before any code exists. This is the horizontal link of the V-model, and it keeps the tests independent of the code. Unit tests verify implemented units, but their expected results come from the unit specifications in the design, so they too can be written as soon as the design is baselined.
 
 ## 2. Stage lifecycle
@@ -104,7 +106,7 @@ When a test fails, the agent that owns the test writes a **defect report** (`tem
 | `requirement` | The requirement is ambiguous, contradictory, or untestable | Requirements Agent, plus a **human question** if behavior a user could observe would change |
 | `environment` | Toolchain, flaky infrastructure, or test harness | Owner of the toolchain (Architecture) or of the harness (the test agent) |
 
-The loop for each defect is: route it, fix it, re-run the failing test, then re-run the fast suite. Run the slow suite when the fix is a large change or when fast-only changes since the last slow run have reached the budget (`AGENTS.md`).
+The loop for each bug is: identify the original condition and confirmed cause, have the owning test agent add or extend its regression test, route the correction to the artifact owner, re-run that specific regression, then re-run the fast suite. Record evidence that the regression failed on the buggy revision for the expected reason and passed after the fix. Existing tests count only when they cover the exact original condition and have this before/after evidence. If reproduction or automation is not possible yet, verification stays pending; the defect cannot be closed as fixed. A routed reproduction may run on the buggy build before normal execution prerequisites, without claiming a gate pass. For a test or harness bug, the guard must catch the original bad setup or false acceptance. The Memory Agent records the cause, correction, regression guard, and what to revisit if the condition recurs. Run the slow suite when the fix is a large change or when fast-only changes since the last slow run have reached the budget (`AGENTS.md`).
 
 **Anti-gaming rules.** A defect may not be "fixed" by:
 - weakening, skipping, or deleting a test without a `test` classification that cites the specification;
@@ -141,3 +143,11 @@ Escalations are written to `factory/questions.md` and shown to the human togethe
 ## Resume and baseline integrity
 
 For each aggregate, component, and specification checkpoint, store the commit and the literal paths it owns. At startup, compare each record with `trace_check --baseline <commit> --paths <paths> --json`, then run the highest closed global trace gate if one exists. Valid trace links cannot reveal a change in behavior if the tags stay the same. Compare differences with approved CRs and the starting snapshots of active work orders. Preserve unexplained changes for review. Keep ID reservations and pending verification when a run is interrupted. An unknown Git reference or a missing path record blocks dependent work until it has been reconciled.
+
+## Persistent memory and recall
+
+At startup, the orchestrator reads project memory and reconciles it with current records. It calls the Memory Agent to create a missing summary, refresh stale or pending facts, or review an earlier issue that resembles the current problem. The agent receives a self-contained work order and writes only `factory/memory.md`. It returns an Agent Report; the orchestrator checks the sources and records which pending events were reconciled in state.
+
+Refresh memory after meaningful baselines, build milestones, decisions, independently verified bug-fix evidence, and CRs, and before handoff or acceptance. Keep pending events across interruptions. Only one memory writer runs at a time, using stable sources. Memory updates do not trigger further updates to themselves or change the eight-stage lifecycle.
+
+Memory summarizes the evidence and explains why earlier work matters. It cannot override an approved specification, authorize a change, or establish that tests passed. The orchestrator filters excerpts by the receiving agent's information rules, so independent verification remains independent. Full details stay in the original log, commits, decisions, defects, and test reports. Missing root-cause or regression evidence stays visible, and the related defect or CR cannot close as fixed, or H2 pass, while required reconciliation is pending.

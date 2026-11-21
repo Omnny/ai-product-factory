@@ -137,6 +137,22 @@ class TraceCheckTest(unittest.TestCase):
         self.assertIn("| DES-002 | ARCH-002, IF-001 | IT-001 | src/calc.py | UT-002 |", matrix)
         self.assertIn("PASS", matrix)
 
+    def test_historical_memory_cannot_redefine_live_artifacts_or_verdicts(self):
+        files = dict(VALID)
+        files['factory/memory.md'] = """
+# Project memory
+### CON-999: An old idea, not current scope
+### REQ-001: Earlier wording, retained as history only
+- **Source:** CON-999
+- **Statement:** Old behavior without a valid EARS statement.
+| REQ-001 | rejected | AT-999 | Historical result, not a current verdict |
+"""
+        code, result = self.run_check(files)
+        self.assertEqual(code, 0, self.messages(result))
+        self.assertEqual(result['counts']['CON'], 1)
+        self.assertEqual(result['counts']['REQ'], 1)
+        self.assertEqual(result['counts']['AT'], 1)
+
     def test_gates_follow_the_eight_v_model_stages(self):
         self.assertEqual(trace_check.GATES, ["requirements", "architecture", "design", "implementation",
                                              "unit", "integration", "system", "acceptance"])

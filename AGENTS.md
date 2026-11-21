@@ -9,7 +9,7 @@ This repository is an **AI Product Factory**. Software is produced by specialize
 | 3 | Design | ↔ | Integration Testing |
 | 4 | Implementation | ↔ | Unit Testing |
 
-The concept (`factory/concept/`) is the factory's input, not a stage.
+The concept (`factory/concept/`) is the factory's input, not a stage. A Memory Agent supports the orchestrator alongside the eight stage agents. It maintains the project's condensed history in `factory/memory.md` and does not add a stage or gate.
 
 ## Who you are
 
@@ -20,7 +20,7 @@ The concept (`factory/concept/`) is the factory's input, not a stage.
 ## Non-negotiable rules
 
 1. **Ownership.** Each path has exactly one owning agent (table below). Never modify a path you don't own. If something upstream is wrong, report it as a defect or question in your Agent Report.
-2. **Traceability.** Every artifact item carries an ID and declares its upstream links, using the syntax in [`docs/traceability.md`](docs/traceability.md). Code carries `@implements DES-###` tags. Tests carry `@test <ID>` tags. Nothing exists without a reason to exist.
+2. **Traceability.** Every artifact item carries an ID and declares its upstream links, using the syntax in [`docs/traceability.md`](docs/traceability.md). Code carries `@implements DES-###` tags. Tests carry `@test <ID>` tags. Nothing exists without a reason to exist. Project memory cites existing IDs and source records; it does not define new trace items.
 3. **No scope invention.** Don't add features, requirements, or behavior that can't be traced upstream. If something is missing, raise a question.
 4. **Independent verification.** Each right-side agent takes expected results from its paired left-side specification (Acceptance from requirements, System Testing from architecture, Integration Testing from design, Unit Testing from the unit specifications in the design), never from the implementation. The Implementation Agent never edits tests, and test agents never edit `src/`.
 5. **Baselines are immutable except through change control.** Once a stage is baselined, any edit to it goes through the orchestrator's change-impact process.
@@ -28,6 +28,8 @@ The concept (`factory/concept/`) is the factory's input, not a stage.
 7. **Evidence over claims.** Work-order completion uses mode-specific checks in [`docs/protocols.md`](docs/protocols.md). A specification or component check never closes a global gate. Closing a stage requires the full execution checklist in [`docs/quality-gates.md`](docs/quality-gates.md).
 8. **Preserve concurrent and human work.** Record exact write paths and starting file hashes before dispatch. Never restore, reset, clean, or delete unexpected changes automatically. Preserve them, report the conflict, and reconcile attribution before continuing.
 9. **Reserve IDs before parallel work.** Only the orchestrator allocates ID ranges, records their high-water marks in state, and assigns exact output paths. Agents use only their reserved IDs; unused numbers stay reserved.
+10. **Every bug fix needs a regression test.** Add or extend an automated test for the original condition that caused the bug. Record the trigger, confirmed root cause, test ID or tooling test name, and evidence that the test failed on the buggy revision for the expected reason and passed after the fix. A general green suite is not enough. The owning test agent writes product tests; the Implementation Agent still never edits them. A defect cannot be marked verified or closed as fixed until this evidence exists. If the condition cannot yet be tested, keep verification pending and report the blocker.
+11. **Remember why.** The orchestrator reads project memory on startup, consults relevant lessons before assigning work, and calls `memory-agent` to create or refresh it after meaningful milestones and independently verified fix evidence. Only the Memory Agent writes `factory/memory.md` during a run. Memory summarizes evidence; primary records, approved specifications, and current test results remain authoritative. Pass only excerpts allowed by each receiving agent's information rules.
 
 ## Commits
 
@@ -74,7 +76,7 @@ G5 closes on the fast suite with 100% line and branch coverage. A component G5 c
 
 Moving a test into the fast suite to avoid a slow run, or skipping a slow run that one of these rules requires, is a broken gate.
 
-The factory checker's own tests (`python3 -m unittest discover -s scripts -p 'test_*.py'`) check the tooling in `scripts/`. They are separate from the product suites.
+The factory checker's own tests (`python3 -m unittest discover -s scripts -p 'test_*.py'`) check the tooling in `scripts/`. They are separate from the product suites. Factory-tooling bug fixes include a regression test there; these tests use their test names rather than product UT/IT/ST/AT IDs. Process or configuration bugs also need an executable regression check for their original condition. A written memory lesson does not replace that check.
 
 ## Ownership map
 
@@ -82,6 +84,7 @@ The factory checker's own tests (`python3 -m unittest discover -s scripts -p 'te
 |---|---|
 | `factory/concept/` | Human (the Requirements Agent may add CON IDs to it) |
 | `factory/state.yaml`, `factory/log.md`, `factory/questions.md`, `factory/changes/`, `factory/defects/` | Orchestrator |
+| `factory/memory.md` | Memory Agent (called by the Orchestrator) |
 | `factory/requirements/` | Requirements Agent |
 | `factory/architecture/` (including `toolchain.md`), `factory/decisions/` | Architecture Agent (Design Agent may add design-level decisions) |
 | `factory/design/` | Design Agent |
